@@ -27,58 +27,108 @@
                 <label for="password" class="block text-sm font-medium text-gray-700">รหัสผ่าน</label>
                 <input type="password" id="password" name="password" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
             </div>
-            <button id="signup-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300 ease-in-out">สมัครสมาชิก</button>
+            <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300 ease-in-out">เข้าสู่ระบบ</button>
+            <button id="signup-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-300 ease-in-out">สมัครสมาชิก</button>
         </div>
 
-        <!-- Links to other pages -->
-        <div class="mt-6 text-center text-sm">
-            <p>ยังไม่มีบัญชีใช่ไหม? <a href="#" class="font-medium text-blue-600 hover:text-blue-500">สมัครสมาชิก</a></p>
-        </div>
-
+        <!-- Message display area -->
+        <div id="message-box" class="mt-4 text-center text-red-500 font-medium"></div>
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // Import Firebase modules
+        // Import necessary Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        const firebaseConfig = {
-            apiKey: "AIzaSyCBuv3mmGIpz-TFx53V7qAtJTUmSMAvDdM",
-            authDomain: "shose-ebe00.firebaseapp.com",
-            projectId: "shose-ebe00",
-            storageBucket: "shose-ebe00.appspot.com",
-            messagingSenderId: "463205725991",
-            appId: "1:463205725991:web:5de7f1a3b171f2a40e0600"
-        };
-        
+        // Use the global Firebase config variable
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
         // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
+        let app;
+        let auth;
+        let db;
         
-        // Get the sign-up button and add an event listener
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.error("Firebase initialization error:", error.message);
+            document.getElementById('message-box').textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ Firebase กรุณาตรวจสอบการตั้งค่า";
+        }
+        
+        // Get elements from the DOM
+        const loginBtn = document.getElementById('login-btn');
         const signupBtn = document.getElementById('signup-btn');
-        signupBtn.addEventListener('click', async (event) => {
-            event.preventDefault();
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const messageBox = document.getElementById('message-box');
         
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-        
+        // Function to check input fields
+        const validateInputs = () => {
+            messageBox.textContent = ''; // Clear previous messages
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
             if (!email || !password) {
-                alert('โปรดกรอกอีเมลและรหัสผ่าน');
-                return;
+                messageBox.textContent = 'โปรดกรอกอีเมลและรหัสผ่านให้ครบถ้วน';
+                return false;
             }
-        
+            return { email, password };
+        };
+
+        // Event listener for the Login button
+        loginBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            const inputs = validateInputs();
+            if (!inputs) return;
+
             try {
-                // Attempt to create a new user
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                console.log("User signed up successfully:", userCredential.user);
-                // Redirect to the main page after successful sign-up
+                const userCredential = await signInWithEmailAndPassword(auth, inputs.email, inputs.password);
+                console.log("User signed in successfully:", userCredential.user);
                 window.location.href = "main.html";
             } catch (error) {
-                // Log and show any errors
+                console.error("Login failed:", error.message);
+                messageBox.textContent = "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
+            }
+        });
+
+        // Event listener for the Signup button
+        signupBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            const inputs = validateInputs();
+            if (!inputs) return;
+            
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, inputs.email, inputs.password);
+                console.log("User signed up successfully:", userCredential.user);
+
+                // Initialize user data in Firestore
+                const userId = userCredential.user.uid;
+                const userRef = doc(db, `artifacts/${appId}/users/${userId}/data`, 'userStats');
+                await setDoc(userRef, {
+                    distance: 0,
+                    calories: 0,
+                    lastUpdated: new Date()
+                }, { merge: true });
+
+                // Add user to the public ranking table
+                const publicUserRef = doc(db, `artifacts/${appId}/public/data/rankings`, userId);
+                await setDoc(publicUserRef, {
+                    userId: userId,
+                    distance: 0,
+                    lastUpdated: new Date()
+                }, { merge: true });
+
+                messageBox.textContent = "สมัครสมาชิกสำเร็จ! กำลังเปลี่ยนเส้นทาง...";
+                setTimeout(() => {
+                    window.location.href = "main.html";
+                }, 1500);
+            } catch (error) {
                 console.error("Error signing up:", error.message);
-                alert("เกิดข้อผิดพลาดในการสมัครสมาชิก: " + error.message);
+                messageBox.textContent = "เกิดข้อผิดพลาดในการสมัครสมาชิก: " + error.message;
             }
         });
     </script>
