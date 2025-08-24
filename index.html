@@ -3,134 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เข้าสู่ระบบ</title>
+    <title>เข้าสู่ระบบและลงทะเบียน</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+        <h2 class="text-2xl font-bold text-center mb-6">เข้าสู่ระบบ</h2>
 
-    <!-- Auth Form Container -->
-    <div class="bg-white p-8 md:p-12 rounded-2xl shadow-xl w-full max-w-md">
-
-        <h1 class="text-3xl font-semibold text-center text-gray-800 mb-6">เข้าสู่ระบบ</h1>
-
-        <!-- Form fields -->
-        <div class="space-y-4">
-            <div>
-                <label for="email" class="block text-sm font-medium text-gray-700">อีเมล</label>
-                <input type="email" id="email" name="email" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+        <!-- Login Form -->
+        <div id="login-section">
+            <div class="mb-4">
+                <label for="login-email" class="block text-gray-700 text-sm font-semibold mb-2">อีเมล</label>
+                <input type="email" id="login-email" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="อีเมลของคุณ">
             </div>
-            <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">รหัสผ่าน</label>
-                <input type="password" id="password" name="password" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+            <div class="mb-6">
+                <label for="login-password" class="block text-gray-700 text-sm font-semibold mb-2">รหัสผ่าน</label>
+                <input type="password" id="login-password" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="รหัสผ่าน">
             </div>
-            <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300 ease-in-out">เข้าสู่ระบบ</button>
-            <button id="signup-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-300 ease-in-out">สมัครสมาชิก</button>
+            <button id="login-button" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">เข้าสู่ระบบ</button>
+            <p id="error-message-login" class="text-red-500 text-center mt-4 hidden"></p>
+            <button id="show-register-button" class="w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md mt-4 hover:bg-gray-300 transition duration-300">ลงทะเบียน</button>
         </div>
 
-        <!-- Message display area -->
-        <div id="message-box" class="mt-4 text-center text-red-500 font-medium"></div>
+        <!-- Registration Form -->
+        <div id="register-section" class="hidden">
+            <h2 class="text-2xl font-bold text-center mb-6">ลงทะเบียน</h2>
+            <div class="mb-4">
+                <label for="register-email" class="block text-gray-700 text-sm font-semibold mb-2">อีเมล</label>
+                <input type="email" id="register-email" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="อีเมลของคุณ">
+            </div>
+            <div class="mb-6">
+                <label for="register-password" class="block text-gray-700 text-sm font-semibold mb-2">รหัสผ่าน</label>
+                <input type="password" id="register-password" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="รหัสผ่าน (ขั้นต่ำ 6 ตัวอักษร)">
+            </div>
+            <button id="register-button" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700 transition duration-300">สร้างบัญชี</button>
+            <p id="error-message-register" class="text-red-500 text-center mt-4 hidden"></p>
+            <button id="show-login-button" class="w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md mt-4 hover:bg-gray-300 transition duration-300">กลับไปเข้าสู่ระบบ</button>
+        </div>
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // Import necessary Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
         
-        // Use the global Firebase config variable
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
+        // Firebase configuration from your last message
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBuv3mmGIpz-TFx53V7qAtJTUmSMAvDdM",
+            authDomain: "shose-ebe00.firebaseapp.com",
+            databaseURL: "https://shose-ebe00-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "shose-ebe00",
+            storageBucket: "shose-ebe00.firebasestorage.app",
+            messagingSenderId: "463205725991",
+            appId: "1:463205725991:web:cf2ec089f55afdc0205b02",
+            measurementId: "G-6QMCRTHTY4"
+        };
+        
         // Initialize Firebase
-        let app;
-        let auth;
-        let db;
-        
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (error) {
-            console.error("Firebase initialization error:", error.message);
-            document.getElementById('message-box').textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ Firebase กรุณาตรวจสอบการตั้งค่า";
-        }
-        
-        // Get elements from the DOM
-        const loginBtn = document.getElementById('login-btn');
-        const signupBtn = document.getElementById('signup-btn');
-        const emailInput = document.getElementById('email');
-        const passwordInput = document.getElementById('password');
-        const messageBox = document.getElementById('message-box');
-        
-        // Function to check input fields
-        const validateInputs = () => {
-            messageBox.textContent = ''; // Clear previous messages
-            const email = emailInput.value.trim();
-            const password = passwordInput.value.trim();
-            if (!email || !password) {
-                messageBox.textContent = 'โปรดกรอกอีเมลและรหัสผ่านให้ครบถ้วน';
-                return false;
-            }
-            return { email, password };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // UI Elements
+        const loginSection = document.getElementById('login-section');
+        const registerSection = document.getElementById('register-section');
+        const showRegisterBtn = document.getElementById('show-register-button');
+        const showLoginBtn = document.getElementById('show-login-button');
+        const loginEmailInput = document.getElementById('login-email');
+        const loginPasswordInput = document.getElementById('login-password');
+        const loginButton = document.getElementById('login-button');
+        const errorMessageLogin = document.getElementById('error-message-login');
+        const registerEmailInput = document.getElementById('register-email');
+        const registerPasswordInput = document.getElementById('register-password');
+        const registerButton = document.getElementById('register-button');
+        const errorMessageRegister = document.getElementById('error-message-register');
+
+        // Functions
+        const showMessage = (element, message) => {
+            element.textContent = message;
+            element.classList.remove('hidden');
         };
 
-        // Event listener for the Login button
-        loginBtn.addEventListener('click', async (event) => {
-            event.preventDefault();
-            const inputs = validateInputs();
-            if (!inputs) return;
+        // Event Listeners
+        showRegisterBtn.addEventListener('click', () => {
+            loginSection.classList.add('hidden');
+            registerSection.classList.remove('hidden');
+            errorMessageLogin.classList.add('hidden');
+            errorMessageRegister.classList.add('hidden');
+        });
+
+        showLoginBtn.addEventListener('click', () => {
+            registerSection.classList.add('hidden');
+            loginSection.classList.remove('hidden');
+            errorMessageLogin.classList.add('hidden');
+            errorMessageRegister.classList.add('hidden');
+        });
+
+        loginButton.addEventListener('click', async () => {
+            const email = loginEmailInput.value;
+            const password = loginPasswordInput.value;
 
             try {
-                const userCredential = await signInWithEmailAndPassword(auth, inputs.email, inputs.password);
-                console.log("User signed in successfully:", userCredential.user);
-                window.location.href = "main.html";
+                await signInWithEmailAndPassword(auth, email, password);
+                showMessage(errorMessageLogin, 'เข้าสู่ระบบสำเร็จ! 😊');
+                // You can redirect to another page here or update the UI
             } catch (error) {
-                console.error("Login failed:", error.message);
-                messageBox.textContent = "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
+                console.error("Login Error:", error.code, error.message);
+                let userMessage;
+                switch(error.code) {
+                    case 'auth/invalid-email':
+                        userMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
+                        break;
+                    case 'auth/wrong-password':
+                        userMessage = 'รหัสผ่านไม่ถูกต้อง';
+                        break;
+                    case 'auth/user-not-found':
+                        userMessage = 'ไม่พบบัญชีผู้ใช้นี้';
+                        break;
+                    case 'auth/invalid-api-key':
+                        userMessage = 'เกิดข้อผิดพลาดในการเชื่อมต่อ Firebase โปรดตรวจสอบ API Key ของคุณ';
+                        break;
+                    default:
+                        userMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
+                }
+                showMessage(errorMessageLogin, `เกิดข้อผิดพลาด: ${userMessage}`);
             }
         });
 
-        // Event listener for the Signup button
-        signupBtn.addEventListener('click', async (event) => {
-            event.preventDefault();
-            const inputs = validateInputs();
-            if (!inputs) return;
-            
+        registerButton.addEventListener('click', async () => {
+            const email = registerEmailInput.value;
+            const password = registerPasswordInput.value;
+
             try {
-                const userCredential = await createUserWithEmailAndPassword(auth, inputs.email, inputs.password);
-                console.log("User signed up successfully:", userCredential.user);
-
-                // Initialize user data in Firestore
-                const userId = userCredential.user.uid;
-                const userRef = doc(db, `artifacts/${appId}/users/${userId}/data`, 'userStats');
-                await setDoc(userRef, {
-                    distance: 0,
-                    calories: 0,
-                    lastUpdated: new Date()
-                }, { merge: true });
-
-                // Add user to the public ranking table
-                const publicUserRef = doc(db, `artifacts/${appId}/public/data/rankings`, userId);
-                await setDoc(publicUserRef, {
-                    userId: userId,
-                    distance: 0,
-                    lastUpdated: new Date()
-                }, { merge: true });
-
-                messageBox.textContent = "สมัครสมาชิกสำเร็จ! กำลังเปลี่ยนเส้นทาง...";
-                setTimeout(() => {
-                    window.location.href = "main.html";
-                }, 1500);
+                await createUserWithEmailAndPassword(auth, email, password);
+                showMessage(errorMessageRegister, 'ลงทะเบียนสำเร็จ! 🥳');
             } catch (error) {
-                console.error("Error signing up:", error.message);
-                messageBox.textContent = "เกิดข้อผิดพลาดในการสมัครสมาชิก: " + error.message;
+                console.error("Registration Error:", error.code, error.message);
+                let userMessage;
+                switch(error.code) {
+                    case 'auth/invalid-email':
+                        userMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
+                        break;
+                    case 'auth/email-already-in-use':
+                        userMessage = 'อีเมลนี้ถูกใช้ไปแล้ว';
+                        break;
+                    case 'auth/weak-password':
+                        userMessage = 'รหัสผ่านอ่อนเกินไป (ต้องมีอย่างน้อย 6 ตัวอักษร)';
+                        break;
+                    default:
+                        userMessage = 'เกิดข้อผิดพลาดในการลงทะเบียน';
+                }
+                showMessage(errorMessageRegister, `เกิดข้อผิดพลาด: ${userMessage}`);
             }
         });
+
     </script>
 </body>
 </html>
