@@ -3,109 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ค่าแรงดันไฟฟ้าจาก ESP32</title>
-
-    <!-- Connect to Tailwind CSS for styling -->
+    <title>ตัวอย่างการดึงข้อมูลจาก Firebase Realtime Database</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Connect to "Inter" Font from Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Set Inter as the default font for the entire page */
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900 flex justify-center items-center min-h-screen p-4">
-
-    <!-- Main display container -->
-    <div class="bg-white rounded-3xl shadow-2xl p-8 md:p-12 text-center max-w-lg w-full">
-        <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 mb-4">
-            ค่าแรงดันไฟฟ้าจาก ESP32
-        </h1>
-
-        <p class="text-lg md:text-xl text-gray-600 mb-8">
-            แสดงค่าแรงดันไฟฟ้าล่าสุดที่ได้รับจาก Firebase Realtime Database
-        </p>
-
-        <!-- Data display section -->
-        <div class="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-            <h2 class="text-2xl font-semibold text-gray-700 mb-2">
-                ค่าแรงดันไฟฟ้า:
-            </h2>
-            <p id="voltage-data" class="text-5xl md:text-6xl font-extrabold text-indigo-700">
+<body class="bg-gray-100 p-8">
+    <div class="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <h1 class="text-2xl font-bold text-gray-800 text-center mb-4">ค่าแรงดันไฟฟ้าจาก ESP32</h1>
+        <div class="text-lg text-gray-600 text-center mb-6">
+            แสดงค่าแรงดันไฟฟ้าล่าสุดที่ได้จาก Firebase Realtime Database
+        </div>
+        <div class="bg-blue-100 border border-blue-200 rounded-lg p-6 text-center shadow-inner">
+            <div class="text-base font-medium text-blue-800">ค่าแรงดันไฟฟ้า:</div>
+            <div id="voltage-value" class="text-4xl md:text-5xl font-extrabold text-blue-900 mt-2">
                 กำลังเชื่อมต่อ...
-            </p>
-            <p class="text-lg md:text-xl text-gray-500 mt-2">
-                V (โวลต์)
-            </p>
+            </div>
+            <div class="text-2xl font-semibold text-blue-700 mt-1">V (โวลต์)</div>
+        </div>
+        <div id="user-info" class="text-xs text-gray-500 text-center mt-6">
+            <!-- ข้อมูลผู้ใช้จะแสดงที่นี่ -->
         </div>
     </div>
 
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js"></script>
     <script type="module">
-        // Import necessary Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js";
+        // นำเข้าโมดูลที่จำเป็นจาก Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-        // Define Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCBuv3mmGIpz-TFx53V7qAtJTUmSMAvDdM",
-            authDomain: "shose-ebe00.firebaseapp.com",
-            databaseURL: "https://shose-ebe00-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "shose-ebe00",
-        };
+        // ตัวแปรส่วนกลางที่ Canvas จัดเตรียมไว้
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // Initialize Firebase app and services
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const database = getDatabase(app);
+        // ตัวแปรสำหรับใช้งาน Firebase
+        let app, db, auth;
+        let userId = null;
 
-        // Function to set up Firebase authentication and data listener
-        async function setupFirebase() {
+        // อ้างอิงถึง UI elements
+        const voltageValue = document.getElementById('voltage-value');
+        const userInfo = document.getElementById('user-info');
+
+        // ฟังก์ชันสำหรับเริ่มต้น Firebase
+        async function initializeFirebase() {
             try {
-                // Sign in anonymously to authenticate with the database
-                await signInAnonymously(auth);
-                console.log("Authentication successful.");
+                if (!firebaseConfig) {
+                    throw new Error("Firebase config is missing.");
+                }
 
-                // Define the path to fetch data from
-                const dbRef = ref(database, 'sensor/data');
+                // เริ่มต้น Firebase App
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getDatabase(app);
 
-                // Listen for real-time data changes at the specified path
-                onValue(dbRef, (snapshot) => {
-                    const data = snapshot.val();
-                    const voltageElement = document.getElementById('voltage-data');
+                // เริ่มต้นการตรวจสอบสถานะการล็อกอิน
+                setupAuthListener();
 
-                    // Check if data exists and the voltage property is defined
-                    if (data && typeof data.voltage !== 'undefined') {
-                        // Display the received voltage, formatted to 2 decimal places
-                        voltageElement.innerText = data.voltage.toFixed(2);
-                    } else {
-                        // Display a message if no data is found
-                        voltageElement.innerText = "ไม่พบข้อมูล";
-                    }
-                }, (error) => {
-                    // Handle any errors from the listener
-                    console.error("Firebase listener error:", error);
-                    document.getElementById('voltage-data').innerText = "ข้อผิดพลาด";
-                });
+                // ล็อกอินด้วย token ที่ได้รับมา หรือแบบ anonymous ถ้าไม่มี
+                // โค้ดนี้จะใช้ __initial_auth_token ที่ Canvas จัดเตรียมไว้
+                // ถ้าไม่มี จะใช้การล็อกอินแบบไม่ระบุตัวตน (anonymous)
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                console.log("Firebase initialized successfully.");
 
             } catch (error) {
-                // Handle authentication errors
-                console.error("Firebase authentication error:", error);
-                document.getElementById('voltage-data').innerText = "ข้อผิดพลาดในการเชื่อมต่อ";
+                console.error("Error initializing Firebase:", error);
+                voltageValue.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ: " + error.message;
             }
         }
 
-        // Call the setup function when the page loads
-        window.onload = setupFirebase;
+        // ฟังก์ชันสำหรับรับฟังการเปลี่ยนแปลงสถานะการล็อกอิน (ส่วนสำคัญ)
+        function setupAuthListener() {
+            // ฟังก์ชันนี้จะถูกเรียกเมื่อสถานะการล็อกอินเปลี่ยน
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    // ผู้ใช้ล็อกอินแล้ว
+                    userId = user.uid;
+                    console.log("User signed in with UID:", userId);
+                    userInfo.textContent = `User ID: ${userId}`;
+                    
+                    // เรียกฟังก์ชันสำหรับดึงข้อมูล
+                    fetchVoltageData();
+
+                } else {
+                    // ผู้ใช้ไม่ได้ล็อกอิน
+                    console.log("User is signed out.");
+                    voltageValue.textContent = "ไม่ได้ล็อกอิน";
+                }
+            });
+        }
+
+        // ฟังก์ชันสำหรับดึงข้อมูลจาก Realtime Database แบบเรียลไทม์
+        function fetchVoltageData() {
+            // ตรวจสอบให้แน่ใจว่า Firebase และผู้ใช้พร้อมใช้งาน
+            if (!db || !userId) {
+                console.log("Database or user ID not available yet.");
+                return;
+            }
+
+            // นี่คือ Path ที่คุณต้องแก้ไขให้ตรงกับโครงสร้างข้อมูลของคุณ
+            // ถ้าคุณต้องการใช้ path อื่น ๆ เช่น "sensor/voltage" ให้เปลี่ยนบรรทัดนี้
+            const voltagePath = ref(db, 'voltage');
+
+            // ใช้ onValue เพื่อฟังการเปลี่ยนแปลงของข้อมูลแบบเรียลไทม์
+            onValue(voltagePath, (snapshot) => {
+                const data = snapshot.val();
+                if (data !== null) {
+                    // แสดงข้อมูล
+                    voltageValue.textContent = `${data}`;
+                } else {
+                    voltageValue.textContent = "ไม่มีข้อมูลที่ path นี้";
+                    console.log("No data available at the specified path.");
+                }
+            }, (error) => {
+                console.error("Error fetching data:", error);
+                voltageValue.textContent = "เกิดข้อผิดพลาดในการดึงข้อมูล: " + error.message;
+            });
+        }
+
+        // เริ่มต้นการทำงานทั้งหมด
+        initializeFirebase();
+
     </script>
 </body>
 </html>
