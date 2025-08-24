@@ -3,42 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>หน้าหลัก - ระบบควบคุม</title>
+    <title>ค่าแรงดันไฟฟ้า</title>
     <!-- เชื่อมต่อ Tailwind CSS สำหรับการจัดสไตล์ -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* ตั้งค่าฟอนต์ Inter และกำหนดรูปแบบหลักของหน้า */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #1a202c;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            text-align: center;
-            color: white;
+            transition: background-color 0.5s ease-in-out;
         }
     </style>
 </head>
-<body>
+<body class="bg-gray-800 flex items-center justify-center min-h-screen">
 
-    <div class="p-8 rounded-3xl shadow-lg bg-gray-800 max-w-lg w-full">
+    <div class="p-8 rounded-3xl shadow-lg bg-gray-900 max-w-lg w-full text-center text-white">
         <!-- ส่วนหัวข้อหลัก -->
-        <h1 class="text-4xl font-bold mb-4 text-white">ยินดีต้อนรับ</h1>
-        <p class="text-gray-400 mb-8">สู่ระบบควบคุมและตรวจสอบค่าแรงดันไฟฟ้า</p>
+        <h1 class="text-4xl font-bold mb-4 text-white">สถานะค่าแรงดันไฟฟ้า</h1>
+        <p class="text-gray-400 mb-8">การแสดงผลค่าแรงดันไฟฟ้าแบบเรียลไทม์ (ตัวอย่าง)</p>
 
-        <!-- การ์ดสำหรับลิงก์ไปหน้า Voltage -->
-        <a href="voltage.html" class="block w-full">
-            <div class="bg-gradient-to-r from-green-500 to-teal-600 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                <h2 class="text-2xl font-semibold text-white mb-2">แรงดันไฟฟ้า</h2>
-                <p class="text-white opacity-80">ตรวจสอบสถานะและค่าแรงดันไฟฟ้าแบบเรียลไทม์</p>
-                <!-- ไอคอนลูกศรชี้ไปทางขวา -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mt-4 text-white mx-auto animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
+        <!-- การ์ดแสดงค่าแรงดันไฟฟ้า -->
+        <div id="voltage-card" class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <h2 class="text-2xl font-semibold text-white mb-2">แรงดันไฟฟ้า</h2>
+            <div class="flex items-center justify-center space-x-2">
+                <span id="voltage-value" class="text-5xl font-extrabold text-white">--</span>
+                <span class="text-xl text-white">V</span>
             </div>
-        </a>
+            <p id="voltage-status" class="text-white opacity-80 mt-2">กำลังตรวจสอบ...</p>
+        </div>
+
+        <!-- ปุ่มกลับไปหน้าหลัก -->
+        <div class="mt-8">
+            <a href="index.html" class="inline-block bg-gray-700 text-white py-2 px-4 rounded-full hover:bg-gray-600 transition-colors">
+                กลับไปหน้าหลัก
+            </a>
+        </div>
     </div>
+
+    <script>
+        // ฟังก์ชันสำหรับสุ่มค่าแรงดันไฟฟ้า
+        function getRandomVoltage() {
+            // สุ่มค่าระหว่าง 220 ถึง 240
+            return (Math.random() * (240 - 220) + 220).toFixed(2);
+        }
+
+        // อัปเดตค่าแรงดันไฟฟ้าและสถานะ
+        function updateVoltage() {
+            const voltage = getRandomVoltage();
+            const voltageValueElement = document.getElementById('voltage-value');
+            const voltageStatusElement = document.getElementById('voltage-status');
+            const voltageCard = document.getElementById('voltage-card');
+            const body = document.body;
+
+            voltageValueElement.textContent = voltage;
+
+            // เปลี่ยนสถานะและสีตามค่าแรงดันไฟฟ้า
+            if (voltage > 230) {
+                voltageStatusElement.textContent = "แรงดันไฟฟ้าสูง";
+                voltageCard.className = "bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1";
+                body.className = "bg-red-800 flex items-center justify-center min-h-screen";
+            } else if (voltage < 225) {
+                voltageStatusElement.textContent = "แรงดันไฟฟ้าต่ำ";
+                voltageCard.className = "bg-gradient-to-r from-yellow-500 to-orange-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1";
+                body.className = "bg-yellow-800 flex items-center justify-center min-h-screen";
+            } else {
+                voltageStatusElement.textContent = "แรงดันไฟฟ้าปกติ";
+                voltageCard.className = "bg-gradient-to-r from-green-500 to-teal-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1";
+                body.className = "bg-gray-800 flex items-center justify-center min-h-screen";
+            }
+        }
+
+        // ตั้งค่าให้ฟังก์ชัน updateVoltage ทำงานทุกๆ 3 วินาที
+        setInterval(updateVoltage, 3000);
+
+        // เรียกใช้งานครั้งแรกเมื่อโหลดหน้าเว็บ
+        updateVoltage();
+    </script>
 
 </body>
 </html>
