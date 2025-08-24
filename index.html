@@ -3,163 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เข้าสู่ระบบและลงทะเบียน</title>
+    <title>เข้าสู่ระบบ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
-</head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
-        <h2 class="text-2xl font-bold text-center mb-6">เข้าสู่ระบบ</h2>
-
-        <!-- Login Form -->
-        <div id="login-section">
-            <div class="mb-4">
-                <label for="login-email" class="block text-gray-700 text-sm font-semibold mb-2">อีเมล</label>
-                <input type="email" id="login-email" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="อีเมลของคุณ">
-            </div>
-            <div class="mb-6">
-                <label for="login-password" class="block text-gray-700 text-sm font-semibold mb-2">รหัสผ่าน</label>
-                <input type="password" id="login-password" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="รหัสผ่าน">
-            </div>
-            <button id="login-button" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">เข้าสู่ระบบ</button>
-            <p id="error-message-login" class="text-red-500 text-center mt-4 hidden"></p>
-            <button id="show-register-button" class="w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md mt-4 hover:bg-gray-300 transition duration-300">ลงทะเบียน</button>
-        </div>
-
-        <!-- Registration Form -->
-        <div id="register-section" class="hidden">
-            <h2 class="text-2xl font-bold text-center mb-6">ลงทะเบียน</h2>
-            <div class="mb-4">
-                <label for="register-email" class="block text-gray-700 text-sm font-semibold mb-2">อีเมล</label>
-                <input type="email" id="register-email" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="อีเมลของคุณ">
-            </div>
-            <div class="mb-6">
-                <label for="register-password" class="block text-gray-700 text-sm font-semibold mb-2">รหัสผ่าน</label>
-                <input type="password" id="register-password" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="รหัสผ่าน (ขั้นต่ำ 6 ตัวอักษร)">
-            </div>
-            <button id="register-button" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700 transition duration-300">สร้างบัญชี</button>
-            <p id="error-message-register" class="text-red-500 text-center mt-4 hidden"></p>
-            <button id="show-login-button" class="w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md mt-4 hover:bg-gray-300 transition duration-300">กลับไปเข้าสู่ระบบ</button>
-        </div>
-    </div>
-
-    <!-- Firebase SDKs -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Global variables for Firebase services
+        let app, auth;
+
+        // The Firebase configuration is provided by the canvas environment
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+        // Check if firebaseConfig is not empty
+        if (Object.keys(firebaseConfig).length > 0) {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            console.log("Firebase initialized successfully.");
+        } else {
+            console.error("Firebase configuration is missing.");
+        }
         
-        // Firebase configuration from your last message
-        const firebaseConfig = {
-            apiKey: "AIzaSyCBuv3mmGIpz-TFx53V7qAtJTUmSMAvDdM",
-            authDomain: "shose-ebe00.firebaseapp.com",
-            databaseURL: "https://shose-ebe00-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "shose-ebe00",
-            storageBucket: "shose-ebe00.firebasestorage.app",
-            messagingSenderId: "463205725991",
-            appId: "1:463205725991:web:cf2ec089f55afdc0205b02",
-            measurementId: "G-6QMCRTHTY4"
-        };
-        
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
+        // Define the main function to handle login
+        const handleLogin = async (event) => {
+            event.preventDefault(); // Prevent form submission and page reload
 
-        // UI Elements
-        const loginSection = document.getElementById('login-section');
-        const registerSection = document.getElementById('register-section');
-        const showRegisterBtn = document.getElementById('show-register-button');
-        const showLoginBtn = document.getElementById('show-login-button');
-        const loginEmailInput = document.getElementById('login-email');
-        const loginPasswordInput = document.getElementById('login-password');
-        const loginButton = document.getElementById('login-button');
-        const errorMessageLogin = document.getElementById('error-message-login');
-        const registerEmailInput = document.getElementById('register-email');
-        const registerPasswordInput = document.getElementById('register-password');
-        const registerButton = document.getElementById('register-button');
-        const errorMessageRegister = document.getElementById('error-message-register');
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const messageElement = document.getElementById('message');
+            messageElement.textContent = ""; // Clear previous messages
 
-        // Functions
-        const showMessage = (element, message) => {
-            element.textContent = message;
-            element.classList.remove('hidden');
-        };
-
-        // Event Listeners
-        showRegisterBtn.addEventListener('click', () => {
-            loginSection.classList.add('hidden');
-            registerSection.classList.remove('hidden');
-            errorMessageLogin.classList.add('hidden');
-            errorMessageRegister.classList.add('hidden');
-        });
-
-        showLoginBtn.addEventListener('click', () => {
-            registerSection.classList.add('hidden');
-            loginSection.classList.remove('hidden');
-            errorMessageLogin.classList.add('hidden');
-            errorMessageRegister.classList.add('hidden');
-        });
-
-        loginButton.addEventListener('click', async () => {
-            const email = loginEmailInput.value;
-            const password = loginPasswordInput.value;
+            if (!email || !password) {
+                messageElement.textContent = "กรุณากรอกอีเมลและรหัสผ่าน";
+                return;
+            }
 
             try {
-                await signInWithEmailAndPassword(auth, email, password);
-                showMessage(errorMessageLogin, 'เข้าสู่ระบบสำเร็จ! 😊');
-                // You can redirect to another page here or update the UI
+                // Sign in with email and password
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                console.log("User logged in:", userCredential.user);
+                messageElement.textContent = "เข้าสู่ระบบสำเร็จ! 😊";
+                
+                // Redirect to main.html after successful login
+                setTimeout(() => {
+                    window.location.href = "main.html";
+                }, 1500); // Wait 1.5 seconds before redirecting
+
             } catch (error) {
-                console.error("Login Error:", error.code, error.message);
-                let userMessage;
-                switch(error.code) {
+                const errorCode = error.code;
+                let errorMessage;
+
+                switch(errorCode) {
                     case 'auth/invalid-email':
-                        userMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
+                        errorMessage = "อีเมลไม่ถูกต้อง";
                         break;
-                    case 'auth/wrong-password':
-                        userMessage = 'รหัสผ่านไม่ถูกต้อง';
+                    case 'auth/user-disabled':
+                        errorMessage = "บัญชีนี้ถูกระงับ";
                         break;
                     case 'auth/user-not-found':
-                        userMessage = 'ไม่พบบัญชีผู้ใช้นี้';
-                        break;
-                    case 'auth/invalid-api-key':
-                        userMessage = 'เกิดข้อผิดพลาดในการเชื่อมต่อ Firebase โปรดตรวจสอบ API Key ของคุณ';
+                    case 'auth/wrong-password':
+                    case 'auth/invalid-credential':
+                        errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
                         break;
                     default:
-                        userMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
-                }
-                showMessage(errorMessageLogin, `เกิดข้อผิดพลาด: ${userMessage}`);
-            }
-        });
-
-        registerButton.addEventListener('click', async () => {
-            const email = registerEmailInput.value;
-            const password = registerPasswordInput.value;
-
-            try {
-                await createUserWithEmailAndPassword(auth, email, password);
-                showMessage(errorMessageRegister, 'ลงทะเบียนสำเร็จ! 🥳');
-            } catch (error) {
-                console.error("Registration Error:", error.code, error.message);
-                let userMessage;
-                switch(error.code) {
-                    case 'auth/invalid-email':
-                        userMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
+                        errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
                         break;
+                }
+                console.error("Login Error:", error);
+                messageElement.textContent = errorMessage;
+            }
+        };
+
+        // Define the main function to handle registration
+        const handleRegister = async (event) => {
+            event.preventDefault(); // Prevent form submission and page reload
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const messageElement = document.getElementById('message');
+            messageElement.textContent = ""; // Clear previous messages
+
+            if (!email || !password) {
+                messageElement.textContent = "กรุณากรอกอีเมลและรหัสผ่าน";
+                return;
+            }
+            
+            try {
+                // Create a new user with email and password
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                console.log("User registered:", userCredential.user);
+                messageElement.textContent = "ลงทะเบียนสำเร็จ! 😊";
+            } catch (error) {
+                const errorCode = error.code;
+                let errorMessage;
+
+                switch(errorCode) {
                     case 'auth/email-already-in-use':
-                        userMessage = 'อีเมลนี้ถูกใช้ไปแล้ว';
+                        errorMessage = "อีเมลนี้ถูกใช้ไปแล้ว";
                         break;
                     case 'auth/weak-password':
-                        userMessage = 'รหัสผ่านอ่อนเกินไป (ต้องมีอย่างน้อย 6 ตัวอักษร)';
+                        errorMessage = "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร";
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = "อีเมลไม่ถูกต้อง";
                         break;
                     default:
-                        userMessage = 'เกิดข้อผิดพลาดในการลงทะเบียน';
+                        errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
+                        break;
                 }
-                showMessage(errorMessageRegister, `เกิดข้อผิดพลาด: ${userMessage}`);
+                console.error("Registration Error:", error);
+                messageElement.textContent = errorMessage;
+            }
+        };
+
+        // Add event listeners to buttons once the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginButton = document.getElementById('login-btn');
+            const registerButton = document.getElementById('register-btn');
+
+            if (loginButton) {
+                loginButton.addEventListener('click', handleLogin);
+            }
+
+            if (registerButton) {
+                registerButton.addEventListener('click', handleRegister);
             }
         });
-
     </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">เข้าสู่ระบบ</h1>
+        
+        <form>
+            <div class="mb-4">
+                <label for="email" class="block text-gray-700 font-medium mb-2">อีเมล</label>
+                <input type="email" id="email" name="email" class="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="อีเมลของคุณ">
+            </div>
+            <div class="mb-6">
+                <label for="password" class="block text-gray-700 font-medium mb-2">รหัสผ่าน</label>
+                <input type="password" id="password" name="password" class="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="••••••••">
+            </div>
+            
+            <div class="flex flex-col space-y-3">
+                <button type="button" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    เข้าสู่ระบบ
+                </button>
+                <p id="message" class="text-center text-red-500 font-medium"></p>
+                <p class="text-center text-gray-500 text-sm mt-2">
+                    เกิดข้อผิดพลาด: เกิดข้อผิดพลาดในการเข้าสู่ระบบ
+                </p>
+                <button type="button" id="register-btn" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-xl shadow-md transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
+                    ลงทะเบียน
+                </button>
+            </div>
+        </form>
+    </div>
 </body>
 </html>
