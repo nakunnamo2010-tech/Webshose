@@ -65,8 +65,6 @@
                 setupAuthListener();
 
                 // ล็อกอินด้วย token ที่ได้รับมา หรือแบบ anonymous ถ้าไม่มี
-                // โค้ดนี้จะใช้ __initial_auth_token ที่ Canvas จัดเตรียมไว้
-                // ถ้าไม่มี จะใช้การล็อกอินแบบไม่ระบุตัวตน (anonymous)
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
