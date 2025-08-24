@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ตัวอย่างการดึงข้อมูลจาก Firebase Realtime Database</title>
+    <title>แสดงค่าแรงดันไฟฟ้าจาก Realtime Database</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
         }
     </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+<body class="bg-gray-100 p-8 flex items-center justify-center min-h-screen">
+    <div class="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8 w-full">
         <h1 class="text-2xl font-bold text-gray-800 text-center mb-4">ค่าแรงดันไฟฟ้าจาก ESP32</h1>
         <div class="text-lg text-gray-600 text-center mb-6">
             แสดงค่าแรงดันไฟฟ้าล่าสุดที่ได้จาก Firebase Realtime Database
@@ -26,45 +26,45 @@
             <div class="text-2xl font-semibold text-blue-700 mt-1">V (โวลต์)</div>
         </div>
         <div id="user-info" class="text-xs text-gray-500 text-center mt-6">
-            <!-- ข้อมูลผู้ใช้จะแสดงที่นี่ -->
+            <!-- User ID will be displayed here -->
         </div>
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // นำเข้าโมดูลที่จำเป็นจาก Firebase
+        // Import necessary modules from Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-        // ตัวแปรส่วนกลางที่ Canvas จัดเตรียมไว้
+        // Global variables provided by the Canvas environment
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // ตัวแปรสำหรับใช้งาน Firebase
+        // Variables for Firebase services
         let app, db, auth;
         let userId = null;
 
-        // อ้างอิงถึง UI elements
+        // Reference to UI elements
         const voltageValue = document.getElementById('voltage-value');
         const userInfo = document.getElementById('user-info');
 
-        // ฟังก์ชันสำหรับเริ่มต้น Firebase
+        // Function to initialize Firebase
         async function initializeFirebase() {
             try {
                 if (!firebaseConfig) {
                     throw new Error("Firebase config is missing.");
                 }
 
-                // เริ่มต้น Firebase App
+                // Initialize Firebase App
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getDatabase(app);
 
-                // เริ่มต้นการตรวจสอบสถานะการล็อกอิน
+                // Set up the authentication listener
                 setupAuthListener();
 
-                // ล็อกอินด้วย token ที่ได้รับมา หรือแบบ anonymous ถ้าไม่มี
+                // Sign in with the provided token or anonymously if not available
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
@@ -79,44 +79,42 @@
             }
         }
 
-        // ฟังก์ชันสำหรับรับฟังการเปลี่ยนแปลงสถานะการล็อกอิน (ส่วนสำคัญ)
+        // Function to handle authentication state changes
         function setupAuthListener() {
-            // ฟังก์ชันนี้จะถูกเรียกเมื่อสถานะการล็อกอินเปลี่ยน
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    // ผู้ใช้ล็อกอินแล้ว
+                    // User is signed in
                     userId = user.uid;
                     console.log("User signed in with UID:", userId);
                     userInfo.textContent = `User ID: ${userId}`;
                     
-                    // เรียกฟังก์ชันสำหรับดึงข้อมูล
+                    // Fetch data once authenticated
                     fetchVoltageData();
-
                 } else {
-                    // ผู้ใช้ไม่ได้ล็อกอิน
+                    // User is signed out
                     console.log("User is signed out.");
                     voltageValue.textContent = "ไม่ได้ล็อกอิน";
                 }
             });
         }
 
-        // ฟังก์ชันสำหรับดึงข้อมูลจาก Realtime Database แบบเรียลไทม์
+        // Function to fetch and listen for real-time data from Realtime Database
         function fetchVoltageData() {
-            // ตรวจสอบให้แน่ใจว่า Firebase และผู้ใช้พร้อมใช้งาน
+            // Ensure Firebase and user are ready
             if (!db || !userId) {
                 console.log("Database or user ID not available yet.");
                 return;
             }
 
-            // นี่คือ Path ที่คุณต้องแก้ไขให้ตรงกับโครงสร้างข้อมูลของคุณ
-            // ถ้าคุณต้องการใช้ path อื่น ๆ เช่น "sensor/voltage" ให้เปลี่ยนบรรทัดนี้
+            // Path to the data in your database
+            // You might need to change 'voltage' to match your data structure.
             const voltagePath = ref(db, 'voltage');
 
-            // ใช้ onValue เพื่อฟังการเปลี่ยนแปลงของข้อมูลแบบเรียลไทม์
+            // Use onValue to listen for real-time updates
             onValue(voltagePath, (snapshot) => {
                 const data = snapshot.val();
                 if (data !== null) {
-                    // แสดงข้อมูล
+                    // Display the data
                     voltageValue.textContent = `${data}`;
                 } else {
                     voltageValue.textContent = "ไม่มีข้อมูลที่ path นี้";
@@ -128,9 +126,8 @@
             });
         }
 
-        // เริ่มต้นการทำงานทั้งหมด
+        // Start the application
         initializeFirebase();
-
     </script>
 </body>
 </html>
