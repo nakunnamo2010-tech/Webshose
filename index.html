@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // Global variables for Firebase services
         let app, auth;
@@ -30,7 +30,31 @@
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
         console.log("Firebase initialized successfully.");
-        
+
+        // Function to show the main content and hide the login form
+        const showMainContent = (user) => {
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('main-container').classList.remove('hidden');
+            document.getElementById('user-email').textContent = user.email;
+        };
+
+        // Function to show the login form and hide the main content
+        const showLoginForm = () => {
+            document.getElementById('login-container').classList.remove('hidden');
+            document.getElementById('main-container').classList.add('hidden');
+        };
+
+        // Listen for authentication state changes
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in, show the main content
+                showMainContent(user);
+            } else {
+                // User is signed out, show the login form
+                showLoginForm();
+            }
+        });
+
         // Define the main function to handle login
         const handleLogin = async (event) => {
             event.preventDefault(); // Prevent form submission and page reload
@@ -58,11 +82,7 @@
                 console.log("User logged in:", userCredential.user);
                 messageElement.textContent = "เข้าสู่ระบบสำเร็จ! 😊";
                 
-                // Redirect to main.html after successful login
-                setTimeout(() => {
-                    window.location.href = "main.html";
-                }, 1500); // Wait 1.5 seconds before redirecting
-
+                // No need for a redirect, auth state listener will handle UI change
             } catch (error) {
                 const errorCode = error.code;
                 let errorMessage;
@@ -147,10 +167,21 @@
             }
         };
 
+        // Handle logout
+        const handleLogout = async () => {
+            try {
+                await signOut(auth);
+                console.log("User logged out successfully.");
+            } catch (error) {
+                console.error("Logout Error:", error);
+            }
+        };
+
         // Add event listeners to buttons once the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
             const loginButton = document.getElementById('login-btn');
             const registerButton = document.getElementById('register-btn');
+            const logoutButton = document.getElementById('logout-btn');
 
             if (loginButton) {
                 loginButton.addEventListener('click', handleLogin);
@@ -158,6 +189,10 @@
 
             if (registerButton) {
                 registerButton.addEventListener('click', handleRegister);
+            }
+            
+            if (logoutButton) {
+                logoutButton.addEventListener('click', handleLogout);
             }
         });
     </script>
@@ -173,7 +208,8 @@
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+    <!-- Login Form Container -->
+    <div id="login-container" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
         <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">เข้าสู่ระบบ</h1>
         
         <form>
@@ -199,6 +235,15 @@
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- Main Content Container (hidden by default) -->
+    <div id="main-container" class="hidden bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
+        <h1 class="text-3xl font-bold text-center mb-4 text-gray-800">ยินดีต้อนรับ!</h1>
+        <p class="text-gray-600 mb-6">คุณได้เข้าสู่ระบบแล้วในฐานะ: <span id="user-email" class="font-semibold text-blue-600"></span></p>
+        <button id="logout-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+            ออกจากระบบ
+        </button>
     </div>
 </body>
 </html>
