@@ -146,8 +146,10 @@
         // Event listener for the sign-up form submission
         signupForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            console.log("Sign-up form submitted.");
             const email = signupEmailInput.value;
             const password = signupPasswordInput.value;
+            console.log("Email:", email);
 
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -185,10 +187,13 @@
         // Event listener for the login form submission
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            console.log("Login form submitted.");
             const email = loginEmailInput.value;
             const password = loginPasswordInput.value;
+            console.log("Email:", email);
 
             try {
+                console.log("Attempting to sign in with email/password...");
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 console.log("User logged in successfully:", userCredential.user);
                 
