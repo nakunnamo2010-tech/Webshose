@@ -13,17 +13,23 @@
         // Global variables for Firebase services
         let app, auth;
 
-        // The Firebase configuration is provided by the canvas environment
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-        // Check if firebaseConfig is not empty and initialize Firebase
-        if (Object.keys(firebaseConfig).length > 0) {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            console.log("Firebase initialized successfully.");
-        } else {
-            console.error("Firebase configuration is missing. Please provide the firebaseConfig object.");
-        }
+        // Your web app's Firebase configuration
+        // This configuration has been provided by the user.
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBuv3mmGIpz-TFx53V7qAtJTUmSMAvDdM",
+            authDomain: "shose-ebe00.firebaseapp.com",
+            databaseURL: "https://shose-ebe00-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "shose-ebe00",
+            storageBucket: "shose-ebe00.firebasestorage.app",
+            messagingSenderId: "463205725991",
+            appId: "1:463205725991:web:cf2ec089f55afdc0205b02",
+            measurementId: "G-6QMCRTHTY4"
+        };
+        
+        // Initialize Firebase
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        console.log("Firebase initialized successfully.");
         
         // Define the main function to handle login
         const handleLogin = async (event) => {
@@ -50,7 +56,7 @@
                 // Sign in with email and password
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 console.log("User logged in:", userCredential.user);
-                messageElement.textContent = "เข้าสู่ระบบสำเร็จ! �";
+                messageElement.textContent = "เข้าสู่ระบบสำเร็จ! 😊";
                 
                 // Redirect to main.html after successful login
                 setTimeout(() => {
@@ -70,13 +76,19 @@
                         break;
                     case 'auth/user-not-found':
                     case 'auth/wrong-password':
-                    case 'auth/invalid-credential':
                         errorMessage = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+                        break;
+                    case 'auth/operation-not-allowed':
+                        errorMessage = "การลงชื่อเข้าใช้ด้วยอีเมลและรหัสผ่านยังไม่ได้เปิดใช้งาน";
+                        break;
+                    case 'auth/invalid-credential':
+                        errorMessage = "ข้อมูลประจำตัวไม่ถูกต้อง โปรดตรวจสอบอีเมลและรหัสผ่านของคุณ";
                         break;
                     default:
                         errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
                         break;
                 }
+                
                 console.error("Login Error:", error);
                 messageElement.textContent = errorMessage;
             }
@@ -122,10 +134,14 @@
                     case 'auth/invalid-email':
                         errorMessage = "อีเมลไม่ถูกต้อง";
                         break;
+                    case 'auth/operation-not-allowed':
+                        errorMessage = "การลงทะเบียนด้วยอีเมลและรหัสผ่านยังไม่ได้เปิดใช้งาน";
+                        break;
                     default:
                         errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
                         break;
                 }
+
                 console.error("Registration Error:", error);
                 messageElement.textContent = errorMessage;
             }
@@ -186,4 +202,3 @@
     </div>
 </body>
 </html>
-�
