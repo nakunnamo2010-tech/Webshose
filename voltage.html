@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ค่าแรงดันไฟฟ้า - ระบบควบคุม</title>
-    <!-- เชื่อมต่อ Tailwind CSS สำหรับการจัดสไตล์ -->
+    <!-- เชื่อมต่อ Tailwind CSS และ Google Fonts -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* ตั้งค่าฟอนต์ Inter และกำหนดรูปแบบหลักของหน้า */
+        /* กำหนดฟอนต์หลักของหน้า */
         body {
             font-family: 'Inter', sans-serif;
             transition: background-color 0.5s ease-in-out;
@@ -20,7 +20,7 @@
     <div class="p-8 rounded-3xl shadow-lg bg-gray-900 max-w-lg w-full text-center text-white">
         <!-- ส่วนหัวข้อหลัก -->
         <h1 class="text-4xl font-bold mb-4 text-white">สถานะค่าแรงดันไฟฟ้า</h1>
-        <p class="text-gray-400 mb-8">การแสดงผลค่าแรงดันไฟฟ้าแบบเรียลไทม์ (จำลอง)</p>
+        <p class="text-gray-400 mb-8">การแสดงผลค่าแรงดันไฟฟ้าแบบเรียลไทม์ (จาก Firebase)</p>
 
         <!-- การ์ดแสดงค่าแรงดันไฟฟ้า -->
         <div id="voltage-card" class="bg-gradient-to-r from-green-500 to-teal-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1">
@@ -29,7 +29,7 @@
                 <span id="voltage-value" class="text-5xl font-extrabold text-white">--</span>
                 <span class="text-xl text-white">V</span>
             </div>
-            <p id="voltage-status" class="text-white opacity-80 mt-2">กำลังตรวจสอบ...</p>
+            <p id="voltage-status" class="text-white opacity-80 mt-2">กำลังเชื่อมต่อ...</p>
         </div>
 
         <!-- ปุ่มกลับไปหน้าหลัก -->
@@ -40,24 +40,32 @@
         </div>
     </div>
 
-    <script>
-        // ฟังก์ชันสำหรับสุ่มค่าแรงดันไฟฟ้า
-        function getRandomVoltage() {
-            // สุ่มค่าระหว่าง 220 ถึง 240
-            return (Math.random() * (240 - 220) + 220).toFixed(2);
-        }
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js"></script>
+    <script type="module">
+        // นำเข้าโมดูลที่จำเป็นจาก Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-        // ฟังก์ชันสำหรับอัปเดตค่าแรงดันไฟฟ้าและสถานะ
-        function updateVoltage() {
-            const voltage = getRandomVoltage();
+        // ตรวจสอบและใช้ตัวแปร Global จากสภาพแวดล้อม
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // ฟังก์ชันสำหรับอัปเดต UI ตามค่าแรงดันไฟฟ้า
+        function updateUI(voltage) {
             const voltageValueElement = document.getElementById('voltage-value');
             const voltageStatusElement = document.getElementById('voltage-status');
             const voltageCard = document.getElementById('voltage-card');
             const body = document.body;
+            
+            // แสดงค่าแรงดันไฟฟ้า ปัดเศษให้เป็นทศนิยม 2 ตำแหน่ง
+            voltageValueElement.textContent = parseFloat(voltage).toFixed(2);
 
-            voltageValueElement.textContent = voltage;
-
-            // เปลี่ยนสถานะและสีตามค่าแรงดันไฟฟ้า
+            // ตั้งค่าสีและการแสดงผลตามค่าแรงดันไฟฟ้า
             if (voltage > 230) {
                 voltageStatusElement.textContent = "แรงดันไฟฟ้าสูง";
                 voltageCard.className = "bg-gradient-to-r from-red-500 to-pink-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1";
@@ -73,11 +81,49 @@
             }
         }
 
-        // ตั้งค่าให้ฟังก์ชัน updateVoltage ทำงานทุกๆ 3 วินาที
-        setInterval(updateVoltage, 3000);
+        // เริ่มต้นการทำงานของ Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
 
-        // เรียกใช้งานครั้งแรกเมื่อโหลดหน้าเว็บ
-        updateVoltage();
+        // ฟังชันสำหรับเชื่อมต่อและรับข้อมูลจาก Firebase
+        async function setupFirebase() {
+            try {
+                // ลงชื่อเข้าใช้ด้วยโทเค็นที่กำหนดให้ (หากมี) หรือลงชื่อเข้าใช้แบบไม่ระบุชื่อ
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                const userId = auth.currentUser?.uid || 'anonymous';
+                console.log("Firebase Authentication Successful. User ID:", userId);
+
+                // สร้าง Reference ไปยังตำแหน่งข้อมูลใน Realtime Database
+                const voltageRef = ref(db, 'sensor/data/voltage');
+
+                // ตั้งค่า Listener เพื่อรับข้อมูลแบบ Real-time
+                onValue(voltageRef, (snapshot) => {
+                    const voltage = snapshot.val();
+                    if (voltage !== null) {
+                        console.log("Received new voltage data:", voltage);
+                        updateUI(voltage);
+                    } else {
+                        console.log("No data available at the specified path.");
+                        document.getElementById('voltage-status').textContent = "ไม่พบข้อมูล";
+                    }
+                }, {
+                    onlyOnce: false // ให้รับข้อมูลทุกครั้งที่มีการเปลี่ยนแปลง
+                });
+
+            } catch (error) {
+                console.error("Error setting up Firebase:", error);
+                document.getElementById('voltage-status').textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+            }
+        }
+
+        // เรียกใช้งานเมื่อหน้าเว็บโหลดเสร็จสมบูรณ์
+        window.onload = setupFirebase;
     </script>
 </body>
 </html>
