@@ -126,6 +126,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, collection, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // Use the global Firebase config variable
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
@@ -144,17 +145,9 @@
             db = getFirestore(app);
         } catch (error) {
             console.error("Firebase initialization error:", error.message);
-            // Handle error, e.g., redirect to login or show an error message
         }
 
-        // Authenticate the user with the provided token
-        if (initialAuthToken) {
-            signInWithCustomToken(auth, initialAuthToken).catch((error) => {
-                console.error("Error signing in with custom token:", error);
-            });
-        }
-
-        // Listen for authentication state changes
+        // Authentication state observer
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 // User is signed in.
@@ -165,14 +158,27 @@
                 // Start listening to data
                 listenForUserData(userId);
                 listenForRankingData();
-
             } else {
-                // User is signed out. Redirect to login page.
+                // User is signed out.
                 console.log("User is not authenticated. Redirecting to login.");
-                // Fixed the redirect URL issue
-                window.location.replace(`index.html`);
+                // Note: In this environment, a full redirect to another file is not feasible.
+                // We'll need to handle the UI change in the same file.
             }
         });
+
+        // Initial authentication with a custom token
+        (async () => {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+            }
+        })();
+
 
         // Function to listen for real-time user data
         function listenForUserData(currentUserId) {
@@ -209,7 +215,9 @@
         // Function to listen for real-time ranking data
         function listenForRankingData() {
             const rankingCollection = collection(db, `artifacts/${appId}/public/data/rankings`);
-            onSnapshot(rankingCollection, (snapshot) => {
+            const q = query(rankingCollection);
+
+            onSnapshot(q, (snapshot) => {
                 const rankingData = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
