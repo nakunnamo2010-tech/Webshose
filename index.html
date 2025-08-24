@@ -49,80 +49,84 @@
         // --- Firebase Configuration and Initialization ---
         // These global variables are provided by the canvas environment.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        
+        // แทนที่ด้วยข้อมูล Firebase ของคุณที่คัดลอกมา
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBuv3mmGIpz-TFx53V7qAtJTUmSMAvDdM",
+            authDomain: "shose-ebe00.firebaseapp.com",
+            databaseURL: "https://shose-ebe00-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "shose-ebe00",
+            storageBucket: "shose-ebe00.firebasestorage.app",
+            messagingSenderId: "463205725991",
+            appId: "1:463205725991:web:cf2ec089f55afdc0205b02",
+            measurementId: "G-6QMCRTHTY4"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
 
-        // Only initialize Firebase if a valid config is available.
-        if (Object.keys(firebaseConfig).length > 0) {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
+        // --- UI Elements and Event Listeners ---
+        const signupForm = document.getElementById('signup-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const messageBox = document.getElementById('message-box');
 
-            // --- UI Elements and Event Listeners ---
-            const signupForm = document.getElementById('signup-form');
-            const emailInput = document.getElementById('email');
-            const passwordInput = document.getElementById('password');
-            const messageBox = document.getElementById('message-box');
+        // Function to display messages to the user
+        const showMessage = (message, isSuccess = false) => {
+            messageBox.textContent = message;
+            messageBox.style.display = 'block';
+            messageBox.className = `mt-6 p-3 rounded-lg text-center ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+        };
 
-            // Function to display messages to the user
-            const showMessage = (message, isSuccess = false) => {
-                messageBox.textContent = message;
-                messageBox.style.display = 'block';
-                messageBox.className = `mt-6 p-3 rounded-lg text-center ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
-            };
+        // Event listener for the sign-up form submission
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent the default form submission behavior
 
-            // Event listener for the sign-up form submission
-            signupForm.addEventListener('submit', async (e) => {
-                e.preventDefault(); // Prevent the default form submission behavior
+            const email = emailInput.value;
+            const password = passwordInput.value;
 
-                const email = emailInput.value;
-                const password = passwordInput.value;
+            // Simple validation to ensure fields are not empty
+            if (!email || !password) {
+                showMessage('โปรดกรอกอีเมลและรหัสผ่านให้ครบถ้วน');
+                return;
+            }
 
-                // Simple validation to ensure fields are not empty
-                if (!email || !password) {
-                    showMessage('โปรดกรอกอีเมลและรหัสผ่านให้ครบถ้วน');
-                    return;
+            try {
+                // Create a new user with email and password using Firebase Auth
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                console.log("User signed up successfully:", userCredential.user);
+
+                // After successful signup, show success message and redirect to voltage.html
+                showMessage('สมัครสมาชิกสำเร็จ! กำลังเปลี่ยนเส้นทาง...', true);
+                
+                setTimeout(() => {
+                    // Redirect to the voltage.html page
+                    window.location.href = './voltage.html';
+                }, 2000); // Wait for 2 seconds before redirecting
+                
+            } catch (error) {
+                console.error("Error during sign up:", error);
+                // Handle specific Firebase auth errors and provide user-friendly messages
+                let errorMessage = 'เกิดข้อผิดพลาดในการสมัครสมาชิก โปรดลองใหม่อีกครั้ง';
+                
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        errorMessage = 'อีเมลนี้ถูกใช้แล้ว โปรดใช้อีเมลอื่น';
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
+                        break;
+                    default:
+                        errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
+                        break;
                 }
-
-                try {
-                    // Create a new user with email and password using Firebase Auth
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    console.log("User signed up successfully:", userCredential.user);
-
-                    // After successful signup, show success message and redirect to voltage.html
-                    showMessage('สมัครสมาชิกสำเร็จ! กำลังเปลี่ยนเส้นทาง...', true);
-                    
-                    setTimeout(() => {
-                        // Redirect to the voltage.html page
-                        window.location.href = './voltage.html';
-                    }, 2000); // Wait for 2 seconds before redirecting
-                    
-                } catch (error) {
-                    console.error("Error during sign up:", error);
-                    // Handle specific Firebase auth errors and provide user-friendly messages
-                    let errorMessage = 'เกิดข้อผิดพลาดในการสมัครสมาชิก โปรดลองใหม่อีกครั้ง';
-                    
-                    switch (error.code) {
-                        case 'auth/email-already-in-use':
-                            errorMessage = 'อีเมลนี้ถูกใช้แล้ว โปรดใช้อีเมลอื่น';
-                            break;
-                        case 'auth/weak-password':
-                            errorMessage = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
-                            break;
-                        case 'auth/invalid-email':
-                            errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
-                            break;
-                        default:
-                            errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
-                            break;
-                    }
-                    showMessage(errorMessage);
-                }
-            });
-
-        } else {
-            console.error("Firebase configuration not found. Please ensure the project is properly configured.");
-            const form = document.getElementById('signup-form');
-            form.innerHTML = `<p class="text-red-500 text-center">Firebase ยังไม่ได้ถูกตั้งค่า โปรดตรวจสอบการตั้งค่าโปรเจกต์ของคุณ</p>`;
-        }
+                showMessage(errorMessage);
+            }
+        });
     </script>
 </body>
 </html>
