@@ -14,6 +14,13 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-6 md:p-10">
@@ -22,7 +29,7 @@
         <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 md:mb-0">แดชบอร์ดข้อมูลผู้ใช้</h1>
-            <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-colors duration-200">
+            <button id="update-data-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-colors duration-200">
                 อัปเดตข้อมูล (จำลอง)
             </button>
         </div>
@@ -31,10 +38,10 @@
         <div class="bg-white p-6 rounded-2xl shadow-xl mb-8">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold text-gray-700">สถานะแบตเตอรี่</h3>
-                <p id="battery-percentage" class="text-2xl font-bold text-gray-900">75%</p>
+                <p id="battery-percentage" class="text-2xl font-bold text-gray-900">กำลังโหลด...</p>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                <div id="battery-bar" class="bg-green-500 h-full rounded-full transition-all duration-500" style="width: 75%;"></div>
+                <div id="battery-bar" class="bg-green-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
             </div>
         </div>
         
@@ -43,28 +50,28 @@
             <!-- Card: Current Energy -->
             <div class="bg-white p-6 rounded-2xl shadow-xl">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">ปริมาณไฟปัจจุบัน</h3>
-                <p id="current-energy" class="text-3xl font-bold text-blue-600">0.00</p>
+                <p id="current-energy" class="text-3xl font-bold text-blue-600">กำลังโหลด...</p>
                 <span class="text-gray-500">หน่วย (kWh)</span>
             </div>
 
             <!-- Card: Total Energy Today -->
             <div class="bg-white p-6 rounded-2xl shadow-xl">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">ปริมาณไฟรวมวันนี้</h3>
-                <p id="total-energy" class="text-3xl font-bold text-purple-600">0.00</p>
+                <p id="total-energy" class="text-3xl font-bold text-purple-600">กำลังโหลด...</p>
                 <span class="text-gray-500">หน่วย (kWh)</span>
             </div>
 
             <!-- Card: Calories Burned -->
             <div class="bg-white p-6 rounded-2xl shadow-xl">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">แคลอรี่ที่เผาผลาญ</h3>
-                <p id="calories" class="text-3xl font-bold text-red-600">0</p>
+                <p id="calories" class="text-3xl font-bold text-red-600">กำลังโหลด...</p>
                 <span class="text-gray-500">แคล</span>
             </div>
 
             <!-- Card: Total Distance -->
             <div class="bg-white p-6 rounded-2xl shadow-xl">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">ระยะทางเดินรวม</h3>
-                <p id="total-distance" class="text-3xl font-bold text-green-600">0.00</p>
+                <p id="total-distance" class="text-3xl font-bold text-green-600">กำลังโหลด...</p>
                 <span class="text-gray-500">km</span>
             </div>
         </div>
@@ -74,8 +81,8 @@
             <!-- Card: User ID -->
             <div class="bg-purple-600 p-8 rounded-2xl shadow-xl text-white flex flex-col justify-between">
                 <h3 class="text-xl font-bold">อันดับปัจจุบันของคุณ</h3>
-                <p id="user-rank" class="text-6xl font-extrabold my-4">N/A</p>
-                <p id="user-id" class="text-sm opacity-75 self-end">ID: ${userId}</p>
+                <p id="user-rank" class="text-6xl font-extrabold my-4">กำลังโหลด...</p>
+                <p id="user-id" class="text-sm opacity-75 self-end">ID: N/A</p>
             </div>
 
             <!-- Card: Today's Progress -->
@@ -102,7 +109,7 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อันดับ</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อผู้ใช้</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID ผู้ใช้</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ระยะทางรวม (กม.)</th>
                         </tr>
                     </thead>
@@ -114,43 +121,167 @@
         </div>
     </div>
 
-    <script>
-        // Placeholder for user ID. In a real application, this would come from Firebase Auth.
-        const userId = "placeholder_user_id";
+    <script type="module">
+        // Import necessary Firebase and Firestore modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, collection, query, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Dummy data for the ranking table
-        const rankingData = [
-            { rank: 1, name: "สมชาย", distance: 15.25 },
-            { rank: 2, name: "สมหญิง", distance: 14.80 },
-            { rank: 3, name: "สมคิด", distance: 12.10 },
-            { rank: 4, name: "สุดา", distance: 11.50 },
-            { rank: 5, name: "มานะ", distance: 10.90 },
-            { rank: 6, name: "มานี", distance: 9.75 },
-            { rank: 7, name: "ปิติ", distance: 8.50 },
-            { rank: 8, name: "ชูใจ", distance: 7.20 },
-            { rank: 9, name: "สมศักดิ์", distance: 6.80 },
-            { rank: 10, name: "สมบูรณ์", distance: 5.40 },
-        ];
+        // Use the global Firebase config variable
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        let app;
+        let auth;
+        let db;
+        let userId = null;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.error("Firebase initialization error:", error.message);
+            // Handle error, e.g., redirect to login or show an error message
+        }
+
+        // Authenticate the user with the provided token
+        if (initialAuthToken) {
+            signInWithCustomToken(auth, initialAuthToken).catch((error) => {
+                console.error("Error signing in with custom token:", error);
+            });
+        }
+
+        // Listen for authentication state changes
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in.
+                userId = user.uid;
+                document.getElementById('user-id').textContent = `ID: ${userId}`;
+                console.log("User authenticated:", userId);
+
+                // Start listening to data
+                listenForUserData(userId);
+                listenForRankingData();
+
+            } else {
+                // User is signed out. Redirect to login page.
+                console.log("User is not authenticated. Redirecting to login.");
+                // Fixed the redirect URL issue
+                window.location.replace(`index.html`);
+            }
+        });
+
+        // Function to listen for real-time user data
+        function listenForUserData(currentUserId) {
+            const userRef = doc(db, `artifacts/${appId}/users/${currentUserId}/data`, 'userStats');
+            onSnapshot(userRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById('total-distance').textContent = data.distance.toFixed(2);
+                    document.getElementById('calories').textContent = data.calories;
+                    document.getElementById('today-distance').textContent = `${data.distance.toFixed(2)} km`;
+                    document.getElementById('today-calories').textContent = `${data.calories} kcal`;
+                    
+                    // Simulate energy and battery status based on user data
+                    const totalEnergy = data.distance * 0.1; // example calculation
+                    const batteryLevel = Math.min(100, (data.distance / 20) * 100); // example based on 20km goal
+                    document.getElementById('total-energy').textContent = totalEnergy.toFixed(2);
+                    document.getElementById('current-energy').textContent = (totalEnergy / 10).toFixed(2);
+                    document.getElementById('battery-percentage').textContent = `${Math.round(batteryLevel)}%`;
+                    document.getElementById('battery-bar').style.width = `${batteryLevel}%`;
+                    document.getElementById('battery-bar').className = `bg-${batteryLevel > 75 ? 'green' : batteryLevel > 50 ? 'yellow' : 'red'}-500 h-full rounded-full transition-all duration-500`;
+
+                } else {
+                    console.log("No user data found. Initializing a new document.");
+                    // This should not happen if the login page initializes correctly, but it's a good fallback.
+                    setDoc(userRef, {
+                        distance: 0,
+                        calories: 0,
+                        lastUpdated: new Date()
+                    }, { merge: true });
+                }
+            });
+        }
+
+        // Function to listen for real-time ranking data
+        function listenForRankingData() {
+            const rankingCollection = collection(db, `artifacts/${appId}/public/data/rankings`);
+            onSnapshot(rankingCollection, (snapshot) => {
+                const rankingData = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    rankingData.push({ ...data, id: doc.id });
+                });
+
+                // Sort the data locally by distance
+                rankingData.sort((a, b) => b.distance - a.distance);
+                renderRankingTable(rankingData);
+
+                // Find user's rank
+                const userRank = rankingData.findIndex(user => user.id === userId) + 1;
+                document.getElementById('user-rank').textContent = userRank > 0 ? `#${userRank}` : 'N/A';
+            });
+        }
 
         // Function to render the ranking table
-        function renderRankingTable() {
+        function renderRankingTable(data) {
             const tableBody = document.getElementById('ranking-table-body');
             tableBody.innerHTML = ''; // Clear existing rows
 
-            rankingData.forEach(user => {
+            // Limit to top 10 for display
+            const top10 = data.slice(0, 10);
+            
+            top10.forEach((user, index) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.rank}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${index + 1}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.distance.toFixed(2)}</td>
                 `;
                 tableBody.appendChild(row);
             });
         }
 
-        // Call the function to render the table on page load
-        document.addEventListener('DOMContentLoaded', renderRankingTable);
+        // Add event listener to the "Update Data" button
+        document.getElementById('update-data-btn').addEventListener('click', async () => {
+            if (!userId) {
+                console.error("User ID not available. Cannot update data.");
+                return;
+            }
+
+            const userRef = doc(db, `artifacts/${appId}/users/${userId}/data`, 'userStats');
+            const publicUserRef = doc(db, `artifacts/${appId}/public/data/rankings`, userId);
+            
+            // Generate some random numbers for demonstration
+            const randomDistance = Math.random() * 2 + 0.1; // Add 0.1 to always have a value
+            const randomCalories = Math.floor(Math.random() * 100) + 50;
+
+            try {
+                // Get the current user data first
+                const docSnap = await getDoc(userRef);
+                const currentData = docSnap.exists() ? docSnap.data() : { distance: 0, calories: 0 };
+
+                // Update user's private stats
+                await setDoc(userRef, {
+                    distance: currentData.distance + randomDistance,
+                    calories: currentData.calories + randomCalories,
+                    lastUpdated: new Date()
+                }, { merge: true });
+
+                // Update user's public ranking data
+                await setDoc(publicUserRef, {
+                    userId: userId, // Ensure userId is included
+                    distance: currentData.distance + randomDistance,
+                    lastUpdated: new Date()
+                }, { merge: true });
+
+            } catch (error) {
+                console.error("Error updating user data:", error);
+            }
+        });
     </script>
 </body>
 </html>
-
