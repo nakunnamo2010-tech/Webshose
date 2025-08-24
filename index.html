@@ -16,13 +16,13 @@
         // The Firebase configuration is provided by the canvas environment
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 
-        // Check if firebaseConfig is not empty
+        // Check if firebaseConfig is not empty and initialize Firebase
         if (Object.keys(firebaseConfig).length > 0) {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             console.log("Firebase initialized successfully.");
         } else {
-            console.error("Firebase configuration is missing.");
+            console.error("Firebase configuration is missing. Please provide the firebaseConfig object.");
         }
         
         // Define the main function to handle login
@@ -39,11 +39,18 @@
                 return;
             }
 
+            // Check if Firebase auth is initialized before proceeding
+            if (!auth) {
+                messageElement.textContent = "เกิดข้อผิดพลาดในการตั้งค่า Firebase";
+                console.error("Firebase Auth is not initialized.");
+                return;
+            }
+
             try {
                 // Sign in with email and password
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 console.log("User logged in:", userCredential.user);
-                messageElement.textContent = "เข้าสู่ระบบสำเร็จ! 😊";
+                messageElement.textContent = "เข้าสู่ระบบสำเร็จ! �";
                 
                 // Redirect to main.html after successful login
                 setTimeout(() => {
@@ -86,6 +93,13 @@
 
             if (!email || !password) {
                 messageElement.textContent = "กรุณากรอกอีเมลและรหัสผ่าน";
+                return;
+            }
+
+            // Check if Firebase auth is initialized before proceeding
+            if (!auth) {
+                messageElement.textContent = "เกิดข้อผิดพลาดในการตั้งค่า Firebase";
+                console.error("Firebase Auth is not initialized.");
                 return;
             }
             
@@ -162,7 +176,7 @@
                 </button>
                 <p id="message" class="text-center text-red-500 font-medium"></p>
                 <p class="text-center text-gray-500 text-sm mt-2">
-                    เกิดข้อผิดพลาด: เกิดข้อผิดพลาดในการเข้าสู่ระบบ
+                    <!-- This text is not needed anymore as the error message is dynamic from the script -->
                 </p>
                 <button type="button" id="register-btn" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-xl shadow-md transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
                     ลงทะเบียน
@@ -172,3 +186,4 @@
     </div>
 </body>
 </html>
+�
