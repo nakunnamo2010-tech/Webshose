@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ค่าแรงดันไฟฟ้า</title>
+    <title>ค่าแรงดันไฟฟ้า - ระบบควบคุม</title>
     <!-- เชื่อมต่อ Tailwind CSS สำหรับการจัดสไตล์ -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        /* ตั้งค่าฟอนต์ Inter และกำหนดรูปแบบหลักของหน้า */
         body {
             font-family: 'Inter', sans-serif;
             transition: background-color 0.5s ease-in-out;
@@ -18,10 +20,10 @@
     <div class="p-8 rounded-3xl shadow-lg bg-gray-900 max-w-lg w-full text-center text-white">
         <!-- ส่วนหัวข้อหลัก -->
         <h1 class="text-4xl font-bold mb-4 text-white">สถานะค่าแรงดันไฟฟ้า</h1>
-        <p class="text-gray-400 mb-8">การแสดงผลค่าแรงดันไฟฟ้าแบบเรียลไทม์ (ตัวอย่าง)</p>
+        <p class="text-gray-400 mb-8">การแสดงผลค่าแรงดันไฟฟ้าแบบเรียลไทม์ (จำลอง)</p>
 
         <!-- การ์ดแสดงค่าแรงดันไฟฟ้า -->
-        <div id="voltage-card" class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+        <div id="voltage-card" class="bg-gradient-to-r from-green-500 to-teal-600 rounded-2xl p-6 shadow-xl transition-all duration-300 transform hover:-translate-y-1">
             <h2 class="text-2xl font-semibold text-white mb-2">แรงดันไฟฟ้า</h2>
             <div class="flex items-center justify-center space-x-2">
                 <span id="voltage-value" class="text-5xl font-extrabold text-white">--</span>
@@ -45,7 +47,7 @@
             return (Math.random() * (240 - 220) + 220).toFixed(2);
         }
 
-        // อัปเดตค่าแรงดันไฟฟ้าและสถานะ
+        // ฟังก์ชันสำหรับอัปเดตค่าแรงดันไฟฟ้าและสถานะ
         function updateVoltage() {
             const voltage = getRandomVoltage();
             const voltageValueElement = document.getElementById('voltage-value');
@@ -77,6 +79,5 @@
         // เรียกใช้งานครั้งแรกเมื่อโหลดหน้าเว็บ
         updateVoltage();
     </script>
-
 </body>
 </html>
