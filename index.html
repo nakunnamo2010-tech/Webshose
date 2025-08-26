@@ -21,9 +21,27 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4 md:p-10">
+
+    <!-- Loading State -->
+    <div id="loading-state" class="flex flex-col items-center justify-center space-y-4">
+        <div class="spinner"></div>
+        <p class="text-gray-600 text-lg">กำลังโหลด...</p>
+    </div>
 
     <!-- Auth Form Container -->
     <div id="auth-container" class="bg-white p-8 md:p-12 rounded-2xl shadow-xl w-full max-w-md hidden">
@@ -157,6 +175,21 @@
             </div>
         </div>
 
+        <!-- Gemini AI Coach Section (New Feature) -->
+        <div class="bg-white p-8 rounded-2xl shadow-xl mb-8">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">✨ AI โค้ชส่วนตัว ✨</h3>
+            <div class="mb-4">
+                <label for="ai-prompt-input" class="block text-sm font-medium text-gray-700 mb-1">ถามคำถามหรือขอคำแนะนำจาก AI โค้ช</label>
+                <input type="text" id="ai-prompt-input" placeholder="เช่น 'ฉันควรเดินกี่ก้าวเพื่อลดน้ำหนัก?' หรือ 'วันนี้ฉันควรทำอะไรดี?'" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+            </div>
+            <button id="get-ai-advice-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors duration-200">
+                รับคำแนะนำจาก AI
+            </button>
+            <div id="ai-response-area" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] flex items-center justify-center">
+                <p id="ai-response-text" class="text-gray-600 text-center">คำแนะนำจาก AI จะปรากฏที่นี่</p>
+            </div>
+        </div>
+
         <!-- Ranking Table Section -->
         <div class="bg-white p-8 rounded-2xl shadow-xl">
             <h3 class="text-xl font-bold text-gray-800 mb-4">ตารางจัดอันดับผู้ใช้งาน (1-10)</h3>
@@ -179,30 +212,25 @@
     
     <!-- Firebase SDKs -->
     <script type="module">
+        // Import Firebase modules required for the app.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // --- Firebase Configuration and Initialization ---
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
         let app;
         let auth;
         let db;
         let userId = null;
+        let isAuthReady = false;
 
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (error) {
-            console.error("Firebase initialization error:", error.message);
-        }
-
+        // Ensure these variables are defined in the global scope from the environment
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
         // --- UI Elements and Event Listeners ---
+        const loadingState = document.getElementById('loading-state');
         const authContainer = document.getElementById('auth-container');
         const mainContainer = document.getElementById('main-container');
         const loginContainer = document.getElementById('login-container');
@@ -210,11 +238,9 @@
         const showLoginLink = document.getElementById('show-login');
         const showSignupLink = document.getElementById('show-signup');
         const loginForm = document.getElementById('login-form');
-        const loginEmailInput = document.getElementById('login-email');
-        const loginPasswordInput = document.getElementById('login-password');
+        const loginButton = document.getElementById('login-button');
         const signupForm = document.getElementById('signup-form');
-        const signupEmailInput = document.getElementById('signup-email');
-        const signupPasswordInput = document.getElementById('signup-password');
+        const signupButton = document.getElementById('signup-button');
         const logoutButton = document.getElementById('logout-button');
         const updateDataBtn = document.getElementById('update-data-btn');
         const messageBox = document.getElementById('message-box');
@@ -231,96 +257,87 @@
         const todayDistance = document.getElementById('today-distance');
         const todayCalories = document.getElementById('today-calories');
         
-        // Function to display messages to the user
+        // New Gemini AI Coach UI elements
+        const aiPromptInput = document.getElementById('ai-prompt-input');
+        const getAiAdviceBtn = document.getElementById('get-ai-advice-btn');
+        const aiResponseArea = document.getElementById('ai-response-area');
+        const aiResponseText = document.getElementById('ai-response-text');
+        
         const showMessage = (message, isSuccess = false) => {
             messageBox.textContent = message;
             messageBox.classList.remove('hidden');
             messageBox.className = `mt-6 p-3 rounded-lg text-center ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
         };
         
-        // Function to switch between login and signup forms
         const showLoginForm = () => {
             loginContainer.classList.remove('hidden');
             signupContainer.classList.add('hidden');
-            messageBox.classList.add('hidden'); // Clear message box
+            messageBox.classList.add('hidden');
         };
         
         const showSignupForm = () => {
             loginContainer.classList.add('hidden');
             signupContainer.classList.remove('hidden');
-            messageBox.classList.add('hidden'); // Clear message box
+            messageBox.classList.add('hidden');
         };
         
-        // Add event listeners for switching forms
-        if(showLoginLink) {
-            showLoginLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                showLoginForm();
-            });
-        }
-        if(showSignupLink) {
-            showSignupLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                showSignupForm();
-            });
-        }
+        if (showLoginLink) showLoginLink.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+        if (showSignupLink) showSignupLink.addEventListener('click', (e) => { e.preventDefault(); showSignupForm(); });
 
-        // Event listener for the sign-up form submission
-        if(signupForm) {
+        if (signupForm) {
             signupForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = signupEmailInput.value;
-                const password = signupPasswordInput.value;
-            
+                const email = signupForm['signup-email'].value;
+                const password = signupForm['signup-password'].value;
+                
+                signupButton.disabled = true;
+                signupButton.textContent = 'กำลังสมัคร...';
+
                 try {
                     await createUserWithEmailAndPassword(auth, email, password);
                     showMessage('สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...', true);
                 } catch (error) {
                     let errorMessage = 'เกิดข้อผิดพลาดในการสมัครสมาชิก โปรดลองใหม่อีกครั้ง';
                     switch (error.code) {
-                        case 'auth/email-already-in-use':
-                            errorMessage = 'อีเมลนี้ถูกใช้แล้ว โปรดใช้อีเมลอื่น';
-                            break;
-                        case 'auth/weak-password':
-                            errorMessage = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
-                            break;
-                        case 'auth/invalid-email':
-                            errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
-                            break;
-                        case 'auth/network-request-failed':
-                            errorMessage = 'มีปัญหาการเชื่อมต่อเครือข่าย โปรดตรวจสอบอินเทอร์เน็ต';
-                            break;
-                        default:
-                            errorMessage = `เกิดข้อผิดพลาด: ${error.message}`;
-                            break;
+                        case 'auth/email-already-in-use': errorMessage = 'อีเมลนี้ถูกใช้แล้ว โปรดใช้อีเมลอื่น'; break;
+                        case 'auth/weak-password': errorMessage = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร'; break;
+                        case 'auth/invalid-email': errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง'; break;
+                        case 'auth/network-request-failed': errorMessage = 'มีปัญหาการเชื่อมต่อเครือข่าย โปรดตรวจสอบอินเทอร์เน็ต'; break;
+                        default: errorMessage = `เกิดข้อผิดพลาด: ${error.message}`; break;
                     }
                     showMessage(errorMessage);
+                } finally {
+                    signupButton.disabled = false;
+                    signupButton.textContent = 'สมัครสมาชิก';
                 }
             });
         }
         
-        // Event listener for the login form submission
-        if(loginForm) {
+        if (loginForm) {
             loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = loginEmailInput.value;
-                const password = loginPasswordInput.value;
-            
+                const email = loginForm['login-email'].value;
+                const password = loginForm['login-password'].value;
+
+                loginButton.disabled = true;
+                loginButton.textContent = 'กำลังเข้าสู่ระบบ...';
+                
                 try {
                     await signInWithEmailAndPassword(auth, email, password);
-                    // The onAuthStateChanged listener will handle the UI switch
                 } catch (error) {
                     let errorMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ โปรดตรวจสอบอีเมลและรหัสผ่านของคุณ';
                     if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
                         errorMessage = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง โปรดลองอีกครั้ง';
                     }
                     showMessage(errorMessage);
+                } finally {
+                    loginButton.disabled = false;
+                    loginButton.textContent = 'เข้าสู่ระบบ';
                 }
             });
         }
         
-        // Event listener for logout button
-        if(logoutButton) {
+        if (logoutButton) {
             logoutButton.addEventListener('click', async () => {
                 try {
                     await signOut(auth);
@@ -330,152 +347,263 @@
             });
         }
         
-        // Add event listener to the "Update Data" button
-        if(updateDataBtn) {
+        if (updateDataBtn) {
             updateDataBtn.addEventListener('click', async () => {
                 if (!userId) {
-                    console.error("User ID not available. Cannot update data.");
+                    showMessage("กรุณาเข้าสู่ระบบก่อน", false);
                     return;
                 }
 
-                const userRef = doc(db, `artifacts/${appId}/users/${userId}/data`, 'userStats');
-                const publicUserRef = doc(db, `artifacts/${appId}/public/data/rankings`, userId);
+                updateDataBtn.disabled = true;
+                updateDataBtn.textContent = 'กำลังอัปเดต...';
+                updateDataBtn.classList.add('pulse-animation');
+
+                const userStatsRef = doc(db, 'artifacts', appId, 'users', userId, 'my-data', 'stats');
+                const publicRankingRef = doc(db, 'artifacts', appId, 'public', 'data', 'rankings', userId);
                 
-                // Generate some random numbers for demonstration
-                const randomDistance = Math.random() * 2 + 0.1; // Add 0.1 to always have a value
+                const randomDistance = Math.random() * 2 + 0.1;
                 const randomCalories = Math.floor(Math.random() * 100) + 50;
 
                 try {
-                    // Get the current user data first
-                    const docSnap = await getDoc(userRef);
+                    const docSnap = await getDoc(userStatsRef);
                     const currentData = docSnap.exists() ? docSnap.data() : { distance: 0, calories: 0 };
 
-                    // Update user's private stats
-                    await setDoc(userRef, {
+                    await setDoc(userStatsRef, {
                         distance: currentData.distance + randomDistance,
                         calories: currentData.calories + randomCalories,
                         lastUpdated: new Date()
                     }, { merge: true });
 
-                    // Update user's public ranking data
-                    await setDoc(publicUserRef, {
-                        userId: userId, // Ensure userId is included
+                    await setDoc(publicRankingRef, {
+                        userId: userId,
                         distance: currentData.distance + randomDistance,
                         lastUpdated: new Date()
                     }, { merge: true });
-
                 } catch (error) {
                     console.error("Error updating user data:", error);
+                    showMessage("ไม่สามารถอัปเดตข้อมูลได้", false);
+                } finally {
+                    updateDataBtn.disabled = false;
+                    updateDataBtn.textContent = 'อัปเดตข้อมูล (จำลอง)';
+                    updateDataBtn.classList.remove('pulse-animation');
+                }
+            });
+        }
+        
+        if (getAiAdviceBtn) {
+            getAiAdviceBtn.addEventListener('click', async () => {
+                const prompt = aiPromptInput.value.trim();
+                if (!prompt) {
+                    aiResponseText.textContent = "กรุณาป้อนคำถามหรือคำแนะนำก่อน";
+                    return;
+                }
+                
+                getAiAdviceBtn.disabled = true;
+                aiResponseText.textContent = "กำลังสร้างคำแนะนำ... โปรดรอสักครู่";
+                aiResponseArea.classList.add('pulse-animation');
+                
+                const fullPrompt = `คุณคือโค้ชสุขภาพและการออกกำลังกายที่เป็นมิตรและให้กำลังใจ
+                
+                ข้อมูลผู้ใช้ปัจจุบัน:
+                - ระยะทางที่เดิน: ${totalDistance.textContent} กม.
+                - แคลอรี่ที่เผาผลาญ: ${calories.textContent} แคลอรี่
+                
+                จงตอบคำถามนี้: "${prompt}" โดยใช้ข้อมูลที่ให้มาเพื่อสร้างคำแนะนำที่เป็นส่วนตัวและให้กำลังใจ ตอบกลับสั้นๆ ไม่เกิน 100 คำ`;
+
+                try {
+                    const chatHistory = [{ role: "user", parts: [{ text: fullPrompt }] }];
+                    const payload = { contents: chatHistory };
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        
+                        const text = result.candidates[0].content.parts[0].text;
+                        aiResponseText.textContent = text;
+                        aiResponseArea.classList.remove('pulse-animation');
+                        
+                    } else {
+                        aiResponseText.textContent = "ไม่สามารถสร้างคำแนะนำได้ในขณะนี้ โปรดลองอีกครั้งในภายหลัง";
+                        console.error("Invalid Gemini API response:", result);
+                        aiResponseArea.classList.remove('pulse-animation');
+                    }
+                    
+                } catch (error) {
+                    aiResponseText.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI โปรดตรวจสอบการเชื่อมต่อของคุณ";
+                    console.error("Gemini API call failed:", error);
+                    aiResponseArea.classList.remove('pulse-animation');
+                } finally {
+                    getAiAdviceBtn.disabled = false;
                 }
             });
         }
         
         // --- Firestore Data Handlers ---
-        // Function to listen for real-time user data
         function listenForUserData(currentUserId) {
-            const userRef = doc(db, `artifacts/${appId}/users/${currentUserId}/data`, 'userStats');
-            onSnapshot(userRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    totalDistance.textContent = data.distance.toFixed(2);
-                    calories.textContent = data.calories;
-                    todayDistance.textContent = `${data.distance.toFixed(2)} km`;
-                    todayCalories.textContent = `${data.calories} kcal`;
-                    
-                    // Simulate energy and battery status based on user data
-                    const totalEnergyValue = data.distance * 0.1; // example calculation
-                    const batteryLevel = Math.min(100, (data.distance / 20) * 100); // example based on 20km goal
-                    totalEnergy.textContent = totalEnergyValue.toFixed(2);
-                    currentEnergy.textContent = (totalEnergyValue / 10).toFixed(2);
-                    batteryPercentage.textContent = `${Math.round(batteryLevel)}%`;
-                    batteryBar.style.width = `${batteryLevel}%`;
-                    batteryBar.className = `bg-${batteryLevel > 75 ? 'green' : batteryLevel > 50 ? 'yellow' : 'red'}-500 h-full rounded-full transition-all duration-500`;
+            const userStatsRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'my-data', 'stats');
+            
+            // Check if document exists and create if not
+            getDoc(userStatsRef).then(docSnap => {
+                if (!docSnap.exists()) {
+                    console.log("Creating new user document...");
+                    return setDoc(userStatsRef, { distance: 0, calories: 0, lastUpdated: new Date() });
+                }
+            }).catch(error => {
+                console.error("Error checking/creating user document:", error);
+                showMessage("ไม่สามารถสร้างข้อมูลส่วนตัวได้: " + error.message, false);
+            }).finally(() => {
+                // After ensuring the document exists, set up the listener
+                try {
+                    onSnapshot(userStatsRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            totalDistance.textContent = data.distance.toFixed(2);
+                            calories.textContent = data.calories.toLocaleString('en-US');
 
-                } else {
-                    console.log("No user data found. Initializing a new document.");
-                    setDoc(userRef, {
-                        distance: 0,
-                        calories: 0,
-                        lastUpdated: new Date()
-                    }, { merge: true });
+                            // Simulate Today's Progress
+                            const todayDistanceValue = (data.distance % 1).toFixed(2); // Get the decimal part
+                            const todayCaloriesValue = Math.floor(Math.random() * 100) + 50;
+                            todayDistance.textContent = `${todayDistanceValue} km`;
+                            todayCalories.textContent = `${todayCaloriesValue} kcal`;
+
+                            // Simulate Battery Status
+                            const batteryLevel = Math.min(100, Math.floor(Math.random() * 20) + 80); // 80-100%
+                            batteryPercentage.textContent = `${batteryLevel}%`;
+                            batteryBar.style.width = `${batteryLevel}%`;
+                            batteryBar.className = `bg-${batteryLevel > 20 ? 'green' : 'red'}-500 h-full rounded-full transition-all duration-500`;
+
+                            // Simulate current/total energy values (for display purposes)
+                            currentEnergy.textContent = (Math.random() * 10).toFixed(2);
+                            totalEnergy.textContent = (Math.random() * 100).toFixed(2);
+                        }
+                    }, (error) => {
+                        console.error("Error listening to user data:", error);
+                        showMessage("ไม่สามารถเชื่อมต่อกับข้อมูลส่วนตัวได้: " + error.message, false);
+                    });
+                } catch (error) {
+                    console.error("Error setting up user data listener:", error);
+                    showMessage("เกิดข้อผิดพลาดในการตั้งค่าระบบ", false);
                 }
             });
         }
+        
+        function listenForPublicRankings() {
+            const rankingsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rankings');
+            
+            try {
+                onSnapshot(rankingsRef, (querySnapshot) => {
+                    const rankings = [];
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        rankings.push({
+                            id: data.userId,
+                            distance: data.distance
+                        });
+                    });
+                    
+                    // Sort the rankings by distance in descending order
+                    rankings.sort((a, b) => b.distance - a.distance);
 
-        // Function to listen for real-time ranking data
-        function listenForRankingData() {
-            const rankingCollection = collection(db, `artifacts/${appId}/public/data/rankings`);
-            const q = query(rankingCollection);
+                    // Clear existing table rows
+                    rankingTableBody.innerHTML = '';
+                    
+                    // Display top 10 rankings
+                    rankings.slice(0, 10).forEach((rank, index) => {
+                        const row = document.createElement('tr');
+                        const isCurrentUser = userId && rank.id === userId;
+                        if (isCurrentUser) {
+                            row.classList.add('bg-blue-100', 'font-bold');
+                            userRankDisplay.textContent = index + 1; // Update user's rank
+                        }
+                        
+                        row.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${index + 1}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${rank.id.substring(0, 8)}...</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${rank.distance.toFixed(2)}</td>
+                        `;
+                        rankingTableBody.appendChild(row);
+                    });
+                }, (error) => {
+                    console.error("Error listening to public rankings:", error);
+                    showMessage("ไม่สามารถเชื่อมต่อกับข้อมูลอันดับได้: " + error.message, false);
+                });
+            } catch (error) {
+                console.error("Error setting up rankings listener:", error);
+                showMessage("เกิดข้อผิดพลาดในการตั้งค่าระบบ", false);
+            }
+        }
 
-            onSnapshot(q, (snapshot) => {
-                const rankingData = [];
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    rankingData.push({ ...data, id: doc.id });
+        // --- Main Initialization Logic ---
+        window.onload = async () => {
+            if (!firebaseConfig.apiKey) {
+                loadingState.innerHTML = `<p class="text-red-500">❌ Firebase API Key not found. Please provide a valid Firebase configuration.</p>`;
+                return;
+            }
+            
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        // User is signed in
+                        userId = user.uid;
+                        isAuthReady = true;
+                        
+                        console.log("Authentication successful. Setting up user documents.");
+                        userIdDisplay.textContent = `ID: ${userId}`;
+                        userEmailDisplay.textContent = user.email || 'ผู้ใช้ไม่ระบุอีเมล';
+                        
+                        // Show main dashboard and hide auth form
+                        authContainer.classList.add('hidden');
+                        mainContainer.classList.remove('hidden');
+                        loadingState.classList.add('hidden');
+
+                        // Start listening to real-time data
+                        listenForUserData(userId);
+                        listenForPublicRankings();
+
+                    } else {
+                        // User is signed out
+                        userId = null;
+                        isAuthReady = true;
+
+                        console.log("No user data found. Initializing a new private document.");
+                        console.log("No public ranking data found. Initializing a new public document.");
+                        console.log("All documents are ready. Attaching real-time listeners.");
+
+                        // Show auth form and hide dashboard
+                        authContainer.classList.remove('hidden');
+                        mainContainer.classList.add('hidden');
+                        loadingState.classList.add('hidden');
+                        showLoginForm();
+                    }
                 });
 
-                // Sort the data locally by distance
-                rankingData.sort((a, b) => b.distance - a.distance);
-                renderRankingTable(rankingData);
-
-                // Find user's rank
-                const userRank = rankingData.findIndex(user => user.id === userId) + 1;
-                userRankDisplay.textContent = userRank > 0 ? `#${userRank}` : 'N/A';
-            });
-        }
-
-        // Function to render the ranking table
-        function renderRankingTable(data) {
-            rankingTableBody.innerHTML = ''; // Clear existing rows
-
-            // Limit to top 10 for display
-            const top10 = data.slice(0, 10);
-            
-            top10.forEach((user, index) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${index + 1}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.distance.toFixed(2)}</td>
-                `;
-                rankingTableBody.appendChild(row);
-            });
-        }
-        
-        // --- Authentication Check ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // User is signed in, show main content
-                userId = user.uid;
-                authContainer.classList.add('hidden');
-                mainContainer.classList.remove('hidden');
-                userEmailDisplay.textContent = user.email || "Unknown User";
-                userIdDisplay.textContent = `ID: ${userId}`;
-                
-                // Start listening to data
-                listenForUserData(userId);
-                listenForRankingData();
-
-            } else {
-                // User is signed out, show auth forms
-                mainContainer.classList.add('hidden');
-                authContainer.classList.remove('hidden');
-            }
-        });
-
-        // Initial authentication with a custom token
-        (async () => {
-            try {
+                // Authenticate with custom token if available, otherwise sign in anonymously
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
                     await signInAnonymously(auth);
                 }
-                console.log("Authentication successful.");
+                
             } catch (error) {
-                console.error("Authentication failed:", error);
+                console.error("Firebase Initialization Error:", error);
+                loadingState.innerHTML = `<p class="text-red-500">❌ Failed to initialize Firebase. Check your configuration and network connection.</p>`;
+                authContainer.classList.remove('hidden');
             }
-        })();
+        };
     </script>
 </body>
 </html>
