@@ -1,609 +1,191 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>แดชบอร์ด / เข้าสู่ระบบ</title>
-    <!-- Tailwind CSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Inter font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
+// This file is the main JavaScript for the app.
+// It initializes Firebase, handles authentication, and manages Firestore data.
+
+// The Firebase SDKs for authentication and Firestore.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const leaderboardContainer = document.getElementById('leaderboard');
+const publicLeaderboardList = document.getElementById('public-leaderboard-list');
+const personalBestList = document.getElementById('personal-best-list');
+const scoreInput = document.getElementById('score-input');
+const saveScoreBtn = document.getElementById('save-score-btn');
+const userIdDisplay = document.getElementById('user-id-display');
+const errorMessageDisplay = document.getElementById('error-message');
+const authStatusDisplay = document.getElementById('auth-status');
+
+// This is the Firebase configuration. It is an object containing the keys for your Firebase project.
+// This is automatically provided by the Canvas environment.
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// This is the current application ID, also provided by Canvas.
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+// This is the initial authentication token, provided by Canvas.
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let db;
+let auth;
+let userId = null;
+
+// Function to display an error message on the screen.
+function displayError(message) {
+    console.error(message);
+    if (errorMessageDisplay) {
+        errorMessageDisplay.textContent = `ข้อผิดพลาด: ${message}`;
+        errorMessageDisplay.style.display = 'block';
+    }
+}
+
+// Function to update the UI with the authentication status.
+function updateAuthStatus(status, user) {
+    if (authStatusDisplay) {
+        authStatusDisplay.textContent = `สถานะการรับรองความถูกต้อง: ${status}`;
+    }
+    if (userIdDisplay && user) {
+        userIdDisplay.textContent = `ID ผู้ใช้ปัจจุบัน: ${user.uid}`;
+    }
+}
+
+// Initialize Firebase and handle authentication.
+async function initializeFirebase() {
+    try {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        // Listen for authentication state changes to handle user sign-in.
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                updateAuthStatus("เข้าสู่ระบบแล้ว", user);
+                console.log(`ผู้ใช้เข้าสู่ระบบ: ${userId}`);
+
+                // Now that the user is authenticated, we can safely listen to Firestore.
+                await listenToFirestoreData();
+            } else {
+                updateAuthStatus("ยังไม่ได้เข้าสู่ระบบ", null);
+                userId = null;
+                console.log("ผู้ใช้ออกจากระบบหรือยังไม่ได้เข้าสู่ระบบ");
+            }
+        });
+
+        // Sign in the user using the custom token provided by the environment.
+        if (initialAuthToken) {
+            await signInWithCustomToken(auth, initialAuthToken);
+            console.log("เข้าสู่ระบบด้วยโทเค็นที่กำหนดเองสำเร็จ");
+        } else {
+            await signInAnonymously(auth);
+            console.log("เข้าสู่ระบบแบบไม่ระบุชื่อสำเร็จ");
         }
-        .pulse-animation {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-top: 4px solid #3b82f6;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4 md:p-10">
+    } catch (error) {
+        displayError(`เกิดข้อผิดพลาดในการเริ่มต้น Firebase: ${error.message}`);
+    }
+}
 
-    <!-- Loading State -->
-    <div id="loading-state" class="flex flex-col items-center justify-center space-y-4">
-        <div class="spinner"></div>
-        <p class="text-gray-600 text-lg">กำลังโหลด...</p>
-    </div>
+// Function to listen for changes to the Firestore data.
+async function listenToFirestoreData() {
+    if (!userId) {
+        console.error("ผู้ใช้ยังไม่ได้เข้าสู่ระบบ, ไม่สามารถฟังข้อมูลได้.");
+        return;
+    }
 
-    <!-- Auth Form Container -->
-    <div id="auth-container" class="bg-white p-8 md:p-12 rounded-2xl shadow-xl w-full max-w-md hidden">
-        <!-- Login Form -->
-        <div id="login-container">
-            <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">เข้าสู่ระบบ</h2>
-            <form id="login-form" method="post" class="space-y-4">
-                <div>
-                    <label for="login-email" class="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
-                    <input type="email" id="login-email" name="login-email" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                <div>
-                    <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-                    <input type="password" id="login-password" name="login-password" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                <button type="submit" id="login-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors duration-200">
-                    เข้าสู่ระบบ
-                </button>
-            </form>
-            <div class="mt-4 text-center">
-                <p class="text-sm text-gray-600">ยังไม่มีบัญชีใช่ไหม? <a href="#" id="show-signup" class="text-blue-600 hover:underline font-medium">สมัครสมาชิก</a></p>
-            </div>
-        </div>
-
-        <!-- Sign Up Form (hidden by default) -->
-        <div id="signup-container" class="hidden">
-            <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">สมัครสมาชิก</h2>
-            <form id="signup-form" method="post" class="space-y-4">
-                <div>
-                    <label for="signup-email" class="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
-                    <input type="email" id="signup-email" name="signup-email" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                <div>
-                    <label for="signup-password" class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-                    <input type="password" id="signup-password" name="signup-password" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร</p>
-                </div>
-                <button type="submit" id="signup-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors duration-200">
-                    สมัครสมาชิก
-                </button>
-            </form>
-            <div class="mt-4 text-center">
-                <p class="text-sm text-gray-600">มีบัญชีแล้ว? <a href="#" id="show-login" class="text-blue-600 hover:underline font-medium">เข้าสู่ระบบ</a></p>
-            </div>
-        </div>
-
-        <!-- Message Box for user feedback -->
-        <div id="message-box" class="mt-6 p-3 rounded-lg text-center hidden"></div>
-    </div>
-
-    <!-- Main Dashboard Container -->
-    <div id="main-container" class="container mx-auto hidden">
-        <!-- Header -->
-        <div class="flex flex-col md:flex-row justify-between items-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 md:mb-0">แดชบอร์ดข้อมูลผู้ใช้</h1>
-            <div class="flex items-center space-x-4">
-                <p id="user-email-display" class="font-medium text-gray-700 hidden md:inline"></p>
-                <button id="update-data-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-colors duration-200">
-                    อัปเดตข้อมูล (จำลอง)
-                </button>
-                <button id="logout-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-colors duration-200">
-                    ออกจากระบบ
-                </button>
-            </div>
-        </div>
-
-        <!-- Battery Status Bar -->
-        <div class="bg-white p-6 rounded-2xl shadow-xl mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold text-gray-700">สถานะแบตเตอรี่</h3>
-                <p id="battery-percentage" class="text-2xl font-bold text-gray-900">กำลังโหลด...</p>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                <div id="battery-bar" class="bg-green-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
-            </div>
-        </div>
-        
-        <!-- Main Metrics Section -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Card: Current Energy -->
-            <div class="bg-white p-6 rounded-2xl shadow-xl">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">ปริมาณไฟปัจจุบัน</h3>
-                <p id="current-energy" class="text-3xl font-bold text-blue-600">กำลังโหลด...</p>
-                <span class="text-gray-500">หน่วย (kWh)</span>
-            </div>
-
-            <!-- Card: Total Energy Today -->
-            <div class="bg-white p-6 rounded-2xl shadow-xl">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">ปริมาณไฟรวมวันนี้</h3>
-                <p id="total-energy" class="text-3xl font-bold text-purple-600">กำลังโหลด...</p>
-                <span class="text-gray-500">หน่วย (kWh)</span>
-            </div>
-
-            <!-- Card: Calories Burned -->
-            <div class="bg-white p-6 rounded-2xl shadow-xl">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">แคลอรี่ที่เผาผลาญ</h3>
-                <p id="calories" class="text-3xl font-bold text-red-600">กำลังโหลด...</p>
-                <span class="text-gray-500">แคล</span>
-            </div>
-
-            <!-- Card: Total Distance -->
-            <div class="bg-white p-6 rounded-2xl shadow-xl">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">ระยะทางเดินรวม</h3>
-                <p id="total-distance" class="text-3xl font-bold text-green-600">กำลังโหลด...</p>
-                <span class="text-gray-500">km</span>
-            </div>
-        </div>
-
-        <!-- User Info and Today's Progress Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <!-- Card: User ID -->
-            <div class="bg-purple-600 p-8 rounded-2xl shadow-xl text-white flex flex-col justify-between">
-                <h3 class="text-xl font-bold">อันดับปัจจุบันของคุณ</h3>
-                <p id="user-rank" class="text-6xl font-extrabold my-4">กำลังโหลด...</p>
-                <p id="user-id" class="text-sm opacity-75 self-end">ID: N/A</p>
-            </div>
-
-            <!-- Card: Today's Progress -->
-            <div class="bg-white p-8 rounded-2xl shadow-xl">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">ความคืบหน้าวันนี้</h3>
-                <div class="space-y-2">
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">ระยะทางที่เดินวันนี้</span>
-                        <span id="today-distance" class="font-semibold text-blue-600">0.00 km</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">แคลอรี่ที่เผาผลาญวันนี้</span>
-                        <span id="today-calories" class="font-semibold text-red-600">0 kcal</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Gemini AI Coach Section (New Feature) -->
-        <div class="bg-white p-8 rounded-2xl shadow-xl mb-8">
-            <h3 class="text-xl font-bold text-gray-800 mb-4">✨ AI โค้ชส่วนตัว ✨</h3>
-            <div class="mb-4">
-                <label for="ai-prompt-input" class="block text-sm font-medium text-gray-700 mb-1">ถามคำถามหรือขอคำแนะนำจาก AI โค้ช</label>
-                <input type="text" id="ai-prompt-input" placeholder="เช่น 'ฉันควรเดินกี่ก้าวเพื่อลดน้ำหนัก?' หรือ 'วันนี้ฉันควรทำอะไรดี?'" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500">
-            </div>
-            <button id="get-ai-advice-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors duration-200">
-                รับคำแนะนำจาก AI
-            </button>
-            <div id="ai-response-area" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] flex items-center justify-center">
-                <p id="ai-response-text" class="text-gray-600 text-center">คำแนะนำจาก AI จะปรากฏที่นี่</p>
-            </div>
-        </div>
-
-        <!-- Ranking Table Section -->
-        <div class="bg-white p-8 rounded-2xl shadow-xl">
-            <h3 class="text-xl font-bold text-gray-800 mb-4">ตารางจัดอันดับผู้ใช้งาน (1-10)</h3>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อันดับ</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID ผู้ใช้</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ระยะทางรวม (กม.)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ranking-table-body" class="bg-white divide-y divide-gray-200">
-                        <!-- Ranking rows will be inserted here by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-        // Import Firebase modules required for the app.
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- Firebase Configuration and Initialization ---
-        let app;
-        let auth;
-        let db;
-        let userId = null;
-        let isAuthReady = false;
-
-        // Ensure these variables are defined in the global scope from the environment
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // --- UI Elements and Event Listeners ---
-        const loadingState = document.getElementById('loading-state');
-        const authContainer = document.getElementById('auth-container');
-        const mainContainer = document.getElementById('main-container');
-        const loginContainer = document.getElementById('login-container');
-        const signupContainer = document.getElementById('signup-container');
-        const showLoginLink = document.getElementById('show-login');
-        const showSignupLink = document.getElementById('show-signup');
-        const loginForm = document.getElementById('login-form');
-        const loginButton = document.getElementById('login-button');
-        const signupForm = document.getElementById('signup-form');
-        const signupButton = document.getElementById('signup-button');
-        const logoutButton = document.getElementById('logout-button');
-        const updateDataBtn = document.getElementById('update-data-btn');
-        const messageBox = document.getElementById('message-box');
-        const userEmailDisplay = document.getElementById('user-email-display');
-        const userIdDisplay = document.getElementById('user-id');
-        const userRankDisplay = document.getElementById('user-rank');
-        const rankingTableBody = document.getElementById('ranking-table-body');
-        const batteryPercentage = document.getElementById('battery-percentage');
-        const batteryBar = document.getElementById('battery-bar');
-        const currentEnergy = document.getElementById('current-energy');
-        const totalEnergy = document.getElementById('total-energy');
-        const calories = document.getElementById('calories');
-        const totalDistance = document.getElementById('total-distance');
-        const todayDistance = document.getElementById('today-distance');
-        const todayCalories = document.getElementById('today-calories');
-        
-        // New Gemini AI Coach UI elements
-        const aiPromptInput = document.getElementById('ai-prompt-input');
-        const getAiAdviceBtn = document.getElementById('get-ai-advice-btn');
-        const aiResponseArea = document.getElementById('ai-response-area');
-        const aiResponseText = document.getElementById('ai-response-text');
-        
-        const showMessage = (message, isSuccess = false) => {
-            messageBox.textContent = message;
-            messageBox.classList.remove('hidden');
-            messageBox.className = `mt-6 p-3 rounded-lg text-center ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
-        };
-        
-        const showLoginForm = () => {
-            loginContainer.classList.remove('hidden');
-            signupContainer.classList.add('hidden');
-            messageBox.classList.add('hidden');
-        };
-        
-        const showSignupForm = () => {
-            loginContainer.classList.add('hidden');
-            signupContainer.classList.remove('hidden');
-            messageBox.classList.add('hidden');
-        };
-        
-        if (showLoginLink) showLoginLink.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
-        if (showSignupLink) showSignupLink.addEventListener('click', (e) => { e.preventDefault(); showSignupForm(); });
-
-        if (signupForm) {
-            signupForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = signupForm['signup-email'].value;
-                const password = signupForm['signup-password'].value;
-                
-                signupButton.disabled = true;
-                signupButton.textContent = 'กำลังสมัคร...';
-
-                try {
-                    await createUserWithEmailAndPassword(auth, email, password);
-                    showMessage('สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...', true);
-                } catch (error) {
-                    let errorMessage = 'เกิดข้อผิดพลาดในการสมัครสมาชิก โปรดลองใหม่อีกครั้ง';
-                    switch (error.code) {
-                        case 'auth/email-already-in-use': errorMessage = 'อีเมลนี้ถูกใช้แล้ว โปรดใช้อีเมลอื่น'; break;
-                        case 'auth/weak-password': errorMessage = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร'; break;
-                        case 'auth/invalid-email': errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง'; break;
-                        case 'auth/network-request-failed': errorMessage = 'มีปัญหาการเชื่อมต่อเครือข่าย โปรดตรวจสอบอินเทอร์เน็ต'; break;
-                        default: errorMessage = `เกิดข้อผิดพลาด: ${error.message}`; break;
-                    }
-                    showMessage(errorMessage);
-                } finally {
-                    signupButton.disabled = false;
-                    signupButton.textContent = 'สมัครสมาชิก';
-                }
-            });
-        }
-        
-        if (loginForm) {
-            loginForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = loginForm['login-email'].value;
-                const password = loginForm['login-password'].value;
-
-                loginButton.disabled = true;
-                loginButton.textContent = 'กำลังเข้าสู่ระบบ...';
-                
-                try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                } catch (error) {
-                    let errorMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ โปรดตรวจสอบอีเมลและรหัสผ่านของคุณ';
-                    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-                        errorMessage = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง โปรดลองอีกครั้ง';
-                    }
-                    showMessage(errorMessage);
-                } finally {
-                    loginButton.disabled = false;
-                    loginButton.textContent = 'เข้าสู่ระบบ';
-                }
-            });
-        }
-        
-        if (logoutButton) {
-            logoutButton.addEventListener('click', async () => {
-                try {
-                    await signOut(auth);
-                } catch (error) {
-                    console.error("Logout Error:", error);
-                }
-            });
-        }
-        
-        if (updateDataBtn) {
-            updateDataBtn.addEventListener('click', async () => {
-                if (!userId) {
-                    showMessage("กรุณาเข้าสู่ระบบก่อน", false);
-                    return;
-                }
-
-                updateDataBtn.disabled = true;
-                updateDataBtn.textContent = 'กำลังอัปเดต...';
-                updateDataBtn.classList.add('pulse-animation');
-
-                const userStatsRef = doc(db, 'artifacts', appId, 'users', userId, 'my-data', 'stats');
-                const publicRankingRef = doc(db, 'artifacts', appId, 'public', 'data', 'rankings', userId);
-                
-                const randomDistance = Math.random() * 2 + 0.1;
-                const randomCalories = Math.floor(Math.random() * 100) + 50;
-
-                try {
-                    const docSnap = await getDoc(userStatsRef);
-                    const currentData = docSnap.exists() ? docSnap.data() : { distance: 0, calories: 0 };
-
-                    await setDoc(userStatsRef, {
-                        distance: currentData.distance + randomDistance,
-                        calories: currentData.calories + randomCalories,
-                        lastUpdated: new Date()
-                    }, { merge: true });
-
-                    await setDoc(publicRankingRef, {
-                        userId: userId,
-                        distance: currentData.distance + randomDistance,
-                        lastUpdated: new Date()
-                    }, { merge: true });
-                } catch (error) {
-                    console.error("Error updating user data:", error);
-                    showMessage("ไม่สามารถอัปเดตข้อมูลได้", false);
-                } finally {
-                    updateDataBtn.disabled = false;
-                    updateDataBtn.textContent = 'อัปเดตข้อมูล (จำลอง)';
-                    updateDataBtn.classList.remove('pulse-animation');
-                }
-            });
-        }
-        
-        if (getAiAdviceBtn) {
-            getAiAdviceBtn.addEventListener('click', async () => {
-                const prompt = aiPromptInput.value.trim();
-                if (!prompt) {
-                    aiResponseText.textContent = "กรุณาป้อนคำถามหรือคำแนะนำก่อน";
-                    return;
-                }
-                
-                getAiAdviceBtn.disabled = true;
-                aiResponseText.textContent = "กำลังสร้างคำแนะนำ... โปรดรอสักครู่";
-                aiResponseArea.classList.add('pulse-animation');
-                
-                const fullPrompt = `คุณคือโค้ชสุขภาพและการออกกำลังกายที่เป็นมิตรและให้กำลังใจ
-                
-                ข้อมูลผู้ใช้ปัจจุบัน:
-                - ระยะทางที่เดิน: ${totalDistance.textContent} กม.
-                - แคลอรี่ที่เผาผลาญ: ${calories.textContent} แคลอรี่
-                
-                จงตอบคำถามนี้: "${prompt}" โดยใช้ข้อมูลที่ให้มาเพื่อสร้างคำแนะนำที่เป็นส่วนตัวและให้กำลังใจ ตอบกลับสั้นๆ ไม่เกิน 100 คำ`;
-
-                try {
-                    const chatHistory = [{ role: "user", parts: [{ text: fullPrompt }] }];
-                    const payload = { contents: chatHistory };
-                    const apiKey = "";
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.candidates && result.candidates.length > 0 &&
-                        result.candidates[0].content && result.candidates[0].content.parts &&
-                        result.candidates[0].content.parts.length > 0) {
-                        
-                        const text = result.candidates[0].content.parts[0].text;
-                        aiResponseText.textContent = text;
-                        aiResponseArea.classList.remove('pulse-animation');
-                        
-                    } else {
-                        aiResponseText.textContent = "ไม่สามารถสร้างคำแนะนำได้ในขณะนี้ โปรดลองอีกครั้งในภายหลัง";
-                        console.error("Invalid Gemini API response:", result);
-                        aiResponseArea.classList.remove('pulse-animation');
-                    }
-                    
-                } catch (error) {
-                    aiResponseText.textContent = "เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI โปรดตรวจสอบการเชื่อมต่อของคุณ";
-                    console.error("Gemini API call failed:", error);
-                    aiResponseArea.classList.remove('pulse-animation');
-                } finally {
-                    getAiAdviceBtn.disabled = false;
-                }
-            });
-        }
-        
-        // --- Firestore Data Handlers ---
-        function listenForUserData(currentUserId) {
-            const userStatsRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'my-data', 'stats');
-            
-            // Check if document exists and create if not
-            getDoc(userStatsRef).then(docSnap => {
-                if (!docSnap.exists()) {
-                    console.log("Creating new user document...");
-                    return setDoc(userStatsRef, { distance: 0, calories: 0, lastUpdated: new Date() });
-                }
-            }).catch(error => {
-                console.error("Error checking/creating user document:", error);
-                showMessage("ไม่สามารถสร้างข้อมูลส่วนตัวได้: " + error.message, false);
-            }).finally(() => {
-                // After ensuring the document exists, set up the listener
-                try {
-                    onSnapshot(userStatsRef, (docSnap) => {
-                        if (docSnap.exists()) {
-                            const data = docSnap.data();
-                            totalDistance.textContent = data.distance.toFixed(2);
-                            calories.textContent = data.calories.toLocaleString('en-US');
-
-                            // Simulate Today's Progress
-                            const todayDistanceValue = (data.distance % 1).toFixed(2); // Get the decimal part
-                            const todayCaloriesValue = Math.floor(Math.random() * 100) + 50;
-                            todayDistance.textContent = `${todayDistanceValue} km`;
-                            todayCalories.textContent = `${todayCaloriesValue} kcal`;
-
-                            // Simulate Battery Status
-                            const batteryLevel = Math.min(100, Math.floor(Math.random() * 20) + 80); // 80-100%
-                            batteryPercentage.textContent = `${batteryLevel}%`;
-                            batteryBar.style.width = `${batteryLevel}%`;
-                            batteryBar.className = `bg-${batteryLevel > 20 ? 'green' : 'red'}-500 h-full rounded-full transition-all duration-500`;
-
-                            // Simulate current/total energy values (for display purposes)
-                            currentEnergy.textContent = (Math.random() * 10).toFixed(2);
-                            totalEnergy.textContent = (Math.random() * 100).toFixed(2);
-                        }
-                    }, (error) => {
-                        console.error("Error listening to user data:", error);
-                        showMessage("ไม่สามารถเชื่อมต่อกับข้อมูลส่วนตัวได้: " + error.message, false);
-                    });
-                } catch (error) {
-                    console.error("Error setting up user data listener:", error);
-                    showMessage("เกิดข้อผิดพลาดในการตั้งค่าระบบ", false);
-                }
-            });
-        }
-        
-        function listenForPublicRankings() {
-            const rankingsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rankings');
-            
-            try {
-                onSnapshot(rankingsRef, (querySnapshot) => {
-                    const rankings = [];
-                    querySnapshot.forEach((doc) => {
-                        const data = doc.data();
-                        rankings.push({
-                            id: data.userId,
-                            distance: data.distance
-                        });
-                    });
-                    
-                    // Sort the rankings by distance in descending order
-                    rankings.sort((a, b) => b.distance - a.distance);
-
-                    // Clear existing table rows
-                    rankingTableBody.innerHTML = '';
-                    
-                    // Display top 10 rankings
-                    rankings.slice(0, 10).forEach((rank, index) => {
-                        const row = document.createElement('tr');
-                        const isCurrentUser = userId && rank.id === userId;
-                        if (isCurrentUser) {
-                            row.classList.add('bg-blue-100', 'font-bold');
-                            userRankDisplay.textContent = index + 1; // Update user's rank
-                        }
-                        
-                        row.innerHTML = `
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${index + 1}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${rank.id.substring(0, 8)}...</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${rank.distance.toFixed(2)}</td>
-                        `;
-                        rankingTableBody.appendChild(row);
-                    });
-                }, (error) => {
-                    console.error("Error listening to public rankings:", error);
-                    showMessage("ไม่สามารถเชื่อมต่อกับข้อมูลอันดับได้: " + error.message, false);
+    try {
+        // --- ส่วนที่ 1: จัดการคะแนนส่วนตัว ---
+        const userScoresRef = collection(db, `artifacts/${appId}/users/${userId}/scores`);
+        const userScoresQuery = query(userScoresRef);
+        onSnapshot(userScoresQuery, (querySnapshot) => {
+            personalBestList.innerHTML = '';
+            let scores = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                scores.push({
+                    id: doc.id,
+                    score: data.score,
+                    timestamp: data.timestamp
                 });
-            } catch (error) {
-                console.error("Error setting up rankings listener:", error);
-                showMessage("เกิดข้อผิดพลาดในการตั้งค่าระบบ", false);
-            }
-        }
+            });
 
-        // --- Main Initialization Logic ---
-        window.onload = async () => {
-            if (!firebaseConfig.apiKey) {
-                loadingState.innerHTML = `<p class="text-red-500">❌ Firebase API Key not found. Please provide a valid Firebase configuration.</p>`;
-                return;
-            }
-            
-            try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        // User is signed in
-                        userId = user.uid;
-                        isAuthReady = true;
-                        
-                        console.log("Authentication successful. Setting up user documents.");
-                        userIdDisplay.textContent = `ID: ${userId}`;
-                        userEmailDisplay.textContent = user.email || 'ผู้ใช้ไม่ระบุอีเมล';
-                        
-                        // Show main dashboard and hide auth form
-                        authContainer.classList.add('hidden');
-                        mainContainer.classList.remove('hidden');
-                        loadingState.classList.add('hidden');
+            // Sort scores in descending order.
+            scores.sort((a, b) => b.score - a.score);
 
-                        // Start listening to real-time data
-                        listenForUserData(userId);
-                        listenForPublicRankings();
+            scores.forEach(score => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `คะแนน: ${score.score} | เมื่อ: ${new Date(score.timestamp).toLocaleString()}`;
+                personalBestList.appendChild(listItem);
+            });
+            console.log("อัปเดตข้อมูลส่วนตัวแล้ว");
+        });
 
-                    } else {
-                        // User is signed out
-                        userId = null;
-                        isAuthReady = true;
-
-                        console.log("No user data found. Initializing a new private document.");
-                        console.log("No public ranking data found. Initializing a new public document.");
-                        console.log("All documents are ready. Attaching real-time listeners.");
-
-                        // Show auth form and hide dashboard
-                        authContainer.classList.remove('hidden');
-                        mainContainer.classList.add('hidden');
-                        loadingState.classList.add('hidden');
-                        showLoginForm();
-                    }
+        // --- ส่วนที่ 2: จัดการกระดานผู้นำสาธารณะ ---
+        const publicScoresRef = collection(db, `artifacts/${appId}/public/data/scores`);
+        const publicScoresQuery = query(publicScoresRef);
+        onSnapshot(publicScoresQuery, (querySnapshot) => {
+            publicLeaderboardList.innerHTML = '';
+            let scores = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                scores.push({
+                    id: doc.id,
+                    score: data.score,
+                    userId: data.userId // Ensure userId is available in the public data
                 });
+            });
 
-                // Authenticate with custom token if available, otherwise sign in anonymously
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                
-            } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                loadingState.innerHTML = `<p class="text-red-500">❌ Failed to initialize Firebase. Check your configuration and network connection.</p>`;
-                authContainer.classList.remove('hidden');
-            }
-        };
-    </script>
-</body>
-</html>
+            // Sort scores in descending order.
+            scores.sort((a, b) => b.score - a.score);
+
+            scores.forEach((score, index) => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `อันดับ ${index + 1}: ${score.score} โดย ${score.userId}`;
+                publicLeaderboardList.appendChild(listItem);
+            });
+            console.log("อัปเดตข้อมูลสาธารณะแล้ว");
+        });
+
+    } catch (error) {
+        displayError(`ข้อผิดพลาดในการฟังข้อมูล Firestore: ${error.message}`);
+    }
+}
+
+// Function to save a new score to Firestore.
+async function saveScore() {
+    if (!userId) {
+        displayError("โปรดรอให้ผู้ใช้เข้าสู่ระบบก่อนที่จะบันทึกคะแนน");
+        return;
+    }
+
+    const score = parseInt(scoreInput.value, 10);
+    if (isNaN(score) || score < 0) {
+        displayError("โปรดใส่คะแนนที่ถูกต้อง");
+        return;
+    }
+
+    const newScore = {
+        score: score,
+        timestamp: Date.now(),
+        userId: userId
+    };
+
+    try {
+        // Save to the user's private collection.
+        const userDocRef = doc(collection(db, `artifacts/${appId}/users/${userId}/scores`));
+        await setDoc(userDocRef, newScore);
+
+        // Save to the public leaderboard.
+        const publicDocRef = doc(collection(db, `artifacts/${appId}/public/data/scores`));
+        await setDoc(publicDocRef, newScore);
+
+        console.log("บันทึกคะแนนสำเร็จ!");
+        scoreInput.value = '';
+    } catch (error) {
+        displayError(`ข้อผิดพลาดในการบันทึกคะแนน: ${error.message}`);
+    }
+}
+
+// Attach event listener to the save button.
+if (saveScoreBtn) {
+    saveScoreBtn.addEventListener('click', saveScore);
+}
+
+// Start the app by initializing Firebase.
+initializeFirebase();
